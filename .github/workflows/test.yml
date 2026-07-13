@@ -7,6 +7,33 @@ on:
     branches: [main]
 
 jobs:
+  # ── Node.js unit tests — 3 OS × 2 Node versions ──────────────────────
+  unit-tests:
+    name: Unit (${{ matrix.os }}, Node ${{ matrix.node-version }})
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        node-version: ['20', '22']
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run unit tests (node:test)
+        run: node --test tests/*.test.js 2>&1
+        env:
+          BOOS_HOME: ${{ runner.temp }}/.boos-test
+          BOOS_NO_AGENT_BUS: '1'
+
   # ── cross-platform install/launcher script validation ─────────────────
   platform-scripts:
     name: Platform scripts (${{ matrix.os }})
