@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>boos · setup</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+<!-- Sits under the same /boos/ scope as the router so an installed PWA
+     navigation here doesn't leave scope and pop an address bar. -->
+<link rel="manifest" href="../manifest.webmanifest" />
+<!-- Capture `beforeinstallprompt` as early as possible — Chrome fires
+     it the moment install criteria are met, which can be BEFORE the
+     bottom-of-body script registers its listener if the page is slow
+     to paint. Stash it on `window` so the later script consumes it. -->
+<script>
+window.__deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (ev) => {
+  ev.preventDefault();
+  window.__deferredPrompt = ev;
+  window.dispatchEvent(new Event('boos-bip-ready'));
+});
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+<style>
+  :root {
+    --bg: #faf9f5;
+    --bg-elev: #ffffff;
+    --ink: #1a1815;
+    --ink-mid: #6b665d;
+    --ink-muted: #9a9489;
+    --border: #e8e3d5;
+    --border-soft: #efeadd;
+    --accent: #b3614a;
+    --accent-soft: rgba(179, 97, 74, 0.10);
+    --green: #4a8a4a;
+    --green-soft: rgba(74, 138, 74, 0.10);
+    --warn: #c79544;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  pre {
+    background: var(--ink);
+    color: #e8e3d5;
+    padding: 12px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    margin: 10px 0;
+  }
+  pre code { font-size: 13px; }
+  :not(pre) > code {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 12.5px;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+  }
+  .brand-name {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .brand-dot { color: var(--accent); }
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+  }
+  .subtitle {
+    color: var(--ink-mid);
+    margin: 0 0 32px;
+    font-size: 15px;
+  }
+  .step {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 16px;
+    transition: border-color .15s, opacity .25s;
+    position: relative;
+  }
+  .step.is-done {
+    border-color: rgba(74, 138, 74, 0.30);
+    background: var(--green-soft);
+  }
+  .step-head {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+  }
+  .step-number {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-mid);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .step.is-done .step-number {
+    background: var(--green);
+    color: var(--bg-elev);
+    border-color: var(--green);
+  }
+  .step.is-done .step-number::before {
+    content: "✓";
+  }
+  .step.is-done .step-number span { display: none; }
+  .step-content { flex: 1; min-width: 0; }
+  .step h2 {
+    margin: 0 0 8px;
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .step p {
+    margin: 0 0 10px;
+    color: var(--ink-mid);
+  }
+  .step p strong { color: var(--ink); font-weight: 500; }
+  .step .hint {
+    font-size: 12.5px;
+    color: var(--ink-muted);
+  }
+  .btn {
+    appearance: none;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--bg-elev);
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background .12s, color .12s;
+    margin: 6px 0 4px;
+  }
+  .btn:hover { background: #000; }
+  .btn.subtle {
+    background: var(--bg-elev);
+    color: var(--ink);
+  }
+  .btn.subtle:hover { background: var(--border-soft); }
+  .step-status {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: var(--bg);
+    color: var(--ink-muted);
+    border: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .step-status.is-ok {
+    background: var(--green-soft);
+    color: var(--green);
+    border-color: rgba(74, 138, 74, 0.3);
+  }
+  .step-status.is-warn {
+    background: rgba(199, 149, 68, 0.10);
+    color: var(--warn);
+    border-color: rgba(199, 149, 68, 0.35);
+  }
+  .copy-btn {
+    margin-left: 8px;
+    font-size: 11.5px;
+    background: transparent;
+    border: 1px solid var(--border-soft);
+    color: #e8e3d5;
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,0.08); }
+  .install-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .install-row pre { flex: 1; margin: 10px 0; }
+  .footer {
+    margin-top: 36px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    text-align: center;
+  }
+  .footer a { color: var(--ink-mid); }
+  /* Mark all-steps-done banner */
+  .done-banner {
+    margin-top: 20px;
+    padding: 18px 22px;
+    background: var(--green);
+    color: var(--bg-elev);
+    border-radius: 10px;
+    display: none;
+    text-align: center;
+    font-weight: 500;
+  }
+  .done-banner.show { display: block; animation: pop 0.4s ease-out; }
+  @keyframes pop {
+    from { transform: scale(0.96); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <span class="brand-mark">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="6" fill="#1a1815"/>
+        <text x="16" y="20" text-anchor="middle" fill="#e8e3d5" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600">boos</text>
+      </svg>
+    </span>
+    <span class="brand-name">BOOS setup</span>
+  </div>
+
+  <h1>Set up boos</h1>
+  <p class="subtitle">Three quick steps. We'll auto-detect what's already done — just handle the un-checked ones.</p>
+
+  <!-- Step 1 · boos:// protocol ──────────────────────────────────── -->
+  <div class="step" id="step-protocol">
+    <div class="step-head">
+      <div class="step-number"><span>1</span></div>
+      <div class="step-content">
+        <h2>Allow the boos:// link handler</h2>
+        <p>boos registers a <code>boos://</code> URL protocol so the "Start backend" button can wake it from the browser. The first time it fires, Chrome shows a confirmation:</p>
+        <p class="hint">→ <strong>Always allow boos.exe to open links of this type</strong> · then click <strong>Open</strong>.</p>
+        <p>Click below to trigger the prompt. (If the backend is already running, this is a no-op.)</p>
+        <button class="btn" id="test-protocol">Try boos://start</button>
+        <span class="step-status" id="status-protocol">Not tested yet</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2 · Localhost networking ──────────────────────────────── -->
+  <div class="step" id="step-firewall">
+    <div class="step-head">
+      <div class="step-number"><span>2</span></div>
+      <div class="step-content">
+        <h2>Allow localhost networking</h2>
+        <p>The backend listens on <code>localhost:7777</code> and this page (hosted on GitHub Pages) fetches from it. Two things to check:</p>
+        <ul>
+          <li><strong>Windows Firewall</strong> — first time <code>node.exe</code> binds the port, Windows pops "Allow this app to communicate". Tick <strong>Private networks</strong> + Allow access.</li>
+          <li><strong>Browser</strong> — Chrome 99+ treats <code>localhost</code> as a secure origin from HTTPS pages out of the box, so usually nothing to do here. If you see a "Mixed content" badge in the URL bar, click it → Allow.</li>
+        </ul>
+        <p>We can verify the browser side by trying a probe:</p>
+        <button class="btn subtle" id="test-localhost">Probe localhost:7777</button>
+        <span class="step-status" id="status-firewall">Not tested yet</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3 · Install as app ────────────────────────────────────── -->
+  <div class="step" id="step-pwa">
+    <div class="step-head">
+      <div class="step-number"><span>3</span></div>
+      <div class="step-content">
+        <h2>Install as app</h2>
+        <p>For a chromeless window with no address bar:</p>
+        <ol>
+          <li>Open <a href="../" target="_blank" rel="noopener">MistyBridge.github.io/boos</a> in Chrome.</li>
+          <li>Look for the install icon (<code>⊕</code>) on the right side of the URL bar.</li>
+          <li>Click <strong>Install</strong>. Chrome creates a Start Menu shortcut and opens boos as a standalone app.</li>
+        </ol>
+        <p class="hint">From then on, the <code>boos</code> command launches the installed PWA window (we auto-detect your install) — no address bar, OS title bar only.</p>
+        <button class="btn" id="install-pwa-btn">Install now</button>
+        <span class="step-status" id="status-pwa">Detecting…</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="done-banner" id="done-banner">
+    All set. Open boos and enjoy your sessions.
+    <div style="margin-top:8px"><a href="../" style="color:#fff; text-decoration:underline">→ Launch boos</a></div>
+  </div>
+
+  <div class="footer">
+    <a href="../" target="_blank">boos router</a> ·
+    <a href="https://github.com/MistyBridge/boos" target="_blank">GitHub</a> ·
+    <a href="https://www.npmjs.com/package/@MistyBridge/boos" target="_blank">npm</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (sel) => document.querySelector(sel);
+  const protocolStatus = $('#status-protocol');
+  const firewallStatus = $('#status-firewall');
+  const pwaStatus = $('#status-pwa');
+
+  // ── Background health probe — reused by the protocol-test wait
+  // loop and the localhost probe button. Doesn't have its own visible
+  // step (the page is opened from npm postinstall so we assume the
+  // user just installed); the result just feeds into step 2's status.
+  async function checkInstalled() {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 2000);
+      const r = await fetch('http://localhost:7777/api/health', { signal: ctrl.signal, cache: 'no-store' });
+      clearTimeout(t);
+      if (!r.ok) throw new Error('http ' + r.status);
+      const j = await r.json();
+      if (j.name === '@MistyBridge/boos') {
+        // Reached backend → networking is fine, mark step 2 done.
+        if (!firewallStatus.classList.contains('is-ok')) {
+          firewallStatus.className = 'step-status is-ok';
+          firewallStatus.textContent = '✓ Reached localhost:7777';
+          $('#step-firewall').classList.add('is-done');
+        }
+        updateDoneBanner();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+  checkInstalled();
+  setInterval(checkInstalled, 4000);
+
+  // ── Step 1 · boos:// trigger ────────────────────────────────────
+  $('#test-protocol').addEventListener('click', () => {
+    protocolStatus.className = 'step-status is-warn';
+    protocolStatus.textContent = 'Waiting for Chrome prompt…';
+    location.href = 'boos://start';
+    // We can't directly tell whether the user accepted the protocol
+    // prompt — the next /api/health success is the best signal.
+    let waited = 0;
+    const t = setInterval(async () => {
+      waited += 1500;
+      const ok = await checkInstalled();
+      if (ok) {
+        protocolStatus.className = 'step-status is-ok';
+        protocolStatus.textContent = '✓ Backend woke via boos://';
+        clearInterval(t);
+      } else if (waited > 15000) {
+        protocolStatus.className = 'step-status';
+        protocolStatus.textContent = '— Timed out. If a Chrome dialog appeared, click "Open boos.cmd" and retry.';
+        clearInterval(t);
+      }
+    }, 1500);
+  });
+
+  // ── Step 2 · manual probe ───────────────────────────────────────
+  $('#test-localhost').addEventListener('click', async () => {
+    firewallStatus.className = 'step-status is-warn';
+    firewallStatus.textContent = 'Probing…';
+    const ok = await checkInstalled();
+    if (ok) {
+      firewallStatus.className = 'step-status is-ok';
+      firewallStatus.textContent = '✓ Reached localhost:7777';
+      $('#step-firewall').classList.add('is-done');
+    } else {
+      firewallStatus.className = 'step-status';
+      firewallStatus.textContent = '— Backend not running. Start it first (step 1).';
+    }
+    updateDoneBanner();
+  });
+
+  // ── Step 3 · PWA detection + beforeinstallprompt ────────────────
+  // Three signals for "is the PWA installed in this browser":
+  //   (a) display-mode standalone — we're INSIDE the PWA window right now
+  //   (b) navigator.getInstalledRelatedApps — returns the manifest if it's
+  //       been installed at any point (requires `related_applications`
+  //       self-reference in the manifest, which we just added)
+  //   (c) `appinstalled` event firing within this session
+  // Any of (a) (b) (c) flips the step to done.
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay)').matches;
+  }
+  let installedFlag = false;
+  function setInstalled(reason) {
+    installedFlag = true;
+    pwaStatus.className = 'step-status is-ok';
+    pwaStatus.textContent = '✓ Installed' + (reason ? ' · ' + reason : '');
+    $('#step-pwa').classList.add('is-done');
+    refreshInstallBtn();
+    updateDoneBanner();
+  }
+  async function updatePwaStatus() {
+    if (isStandalone()) { setInstalled('running as PWA'); return; }
+    if (typeof navigator.getInstalledRelatedApps === 'function') {
+      try {
+        const apps = await navigator.getInstalledRelatedApps();
+        if (apps.some((a) => a.platform === 'webapp')) {
+          setInstalled('detected via getInstalledRelatedApps');
+          return;
+        }
+      } catch {}
+    }
+    if (!installedFlag) {
+      pwaStatus.className = 'step-status';
+      pwaStatus.textContent = '— Not installed yet';
+    }
+    updateDoneBanner();
+  }
+  updatePwaStatus();
+  window.matchMedia('(display-mode: standalone)').addEventListener?.('change', updatePwaStatus);
+
+  // Install button is always visible; its click behavior depends on
+  // what state we're in:
+  //   - deferredPrompt available → fire native Chrome install dialog
+  //   - already installed (standalone display-mode) → open the router
+  //     in a new tab, which Chrome opens AS the installed PWA window
+  //   - no prompt available + not installed → open the router so the
+  //     user can hit Chrome's URL-bar install icon there. Setup page
+  //     is at /boos/setup/, but Chrome only shows the install icon on
+  //     the manifest's `start_url` (/boos/), which is why we route
+  //     them there.
+  const installBtn = $('#install-pwa-btn');
+  function refreshInstallBtn() {
+    if (isStandalone() || installedFlag) {
+      installBtn.textContent = 'Open installed app';
+    } else if (window.__deferredPrompt) {
+      installBtn.textContent = 'Install now';
+    } else {
+      installBtn.textContent = 'Open router to install';
+    }
+  }
+  refreshInstallBtn();
+  window.addEventListener('boos-bip-ready', refreshInstallBtn);
+
+  // After a successful install Chrome opens a new PWA standalone
+  // window at the install-trigger URL — which for us is /boos/setup/,
+  // NOT manifest.start_url. So the freshly-popped PWA shows the setup
+  // page instead of the actual app. We handle this two ways:
+  //   • The PWA window's setup page (it's a fresh load) self-detects
+  //     standalone display-mode at startup and bounces to ../ — see
+  //     the bouncePwaWindow() block right after this.
+  //   • THIS tab (the regular browser one that triggered the install)
+  //     just closes itself so the user isn't left with a stale setup
+  //     tab next to the PWA window. window.close() is allowed for
+  //     script-opened tabs; for postinstall-spawned ones (Windows
+  //     `start` from terminal) Chrome silently refuses and the page
+  //     stays in the "✓ Installed" state, which is harmless.
+  function jumpToApp() {
+    setTimeout(() => {
+      try { window.close(); } catch {}
+    }, 600);
+  }
+
+  // The PWA window's own bounce-to-start_url logic. Triggers when:
+  //   (a) the page loads INSIDE a standalone PWA window — Chrome
+  //       just opened it as the post-install window
+  //   (b) the display-mode transitions to standalone while this page
+  //       is alive (rare — covers the case where Chrome upgrades a
+  //       browser tab into a PWA window mid-session)
+  // Either path replaces the URL with ../ so the setup page never
+  // becomes the PWA's resting state. Uses location.replace so /setup/
+  // doesn't sit in the PWA window's history.
+  function bouncePwaWindow() {
+    if (location.pathname.endsWith('/setup/') || location.pathname.endsWith('/setup/index.html')) {
+      location.replace('../');
+    }
+  }
+  if (window.matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay)').matches) {
+    bouncePwaWindow();
+  }
+  window.matchMedia('(display-mode: standalone)').addEventListener?.('change', (ev) => {
+    if (ev.matches) bouncePwaWindow();
+  });
+
+  installBtn.addEventListener('click', async () => {
+    if (window.__deferredPrompt) {
+      installBtn.disabled = true;
+      try {
+        const result = await window.__deferredPrompt.prompt();
+        if (result.outcome === 'accepted') {
+          pwaStatus.className = 'step-status is-ok';
+          pwaStatus.textContent = '✓ Installed · launching…';
+          $('#step-pwa').classList.add('is-done');
+          updateDoneBanner();
+          jumpToApp();
+        }
+      } finally {
+        window.__deferredPrompt = null;
+        installBtn.disabled = false;
+        refreshInstallBtn();
+      }
+      return;
+    }
+    // No native prompt — fall back to opening the router. Chrome
+    // detects an installed PWA at that origin and opens it as the
+    // standalone window automatically.
+    window.open('../', '_blank', 'noopener');
+  });
+
+  // appinstalled fires AFTER the native dialog resolves "accepted".
+  // We've usually already started jumpToApp() from the prompt's then
+  // branch above, but this is the catch-all in case the user
+  // installed via the URL-bar icon (no deferredPrompt path).
+  window.addEventListener('appinstalled', () => {
+    pwaStatus.className = 'step-status is-ok';
+    pwaStatus.textContent = '✓ Installed · launching…';
+    $('#step-pwa').classList.add('is-done');
+    refreshInstallBtn();
+    updateDoneBanner();
+    jumpToApp();
+  });
+
+  // ── Done banner when all steps are checked ──────────────────────
+  function updateDoneBanner() {
+    const steps = document.querySelectorAll('.step');
+    const allDone = Array.from(steps).every((s) => s.classList.contains('is-done'));
+    $('#done-banner').classList.toggle('show', allDone);
+  }
+
+  // ── Copy buttons ────────────────────────────────────────────────
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = document.querySelector(btn.getAttribute('data-copy'));
+      if (!target) return;
+      navigator.clipboard.writeText(target.textContent).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = orig; }, 1200);
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

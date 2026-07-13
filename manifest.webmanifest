@@ -1,0 +1,31 @@
+{
+  "id": "/boos/",
+  "name": "BOOS",
+  "short_name": "BOOS",
+  "version": "1.0.0",
+  "description": "Single pane over every live claude session on this machine.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ],
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://bakapiano.github.io/boos/manifest.webmanifest"
+    }
+  ]
+}

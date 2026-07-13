@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ffffff">
+<title>BOOS</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="./manifest.webmanifest">
+<style>
+  /* Tiny standalone styles. The router is a transient redirect page —
+     keep it neutral white so it never flashes the per-frontend warm
+     theme between page transitions. The offline card itself still
+     uses accent-ish branding because it's user-facing UI, not a
+     transition. */
+  :root {
+    --bg: #ffffff; --bg-elev: #ffffff; --border: #e5e5e5;
+    --ink: #1a1815; --ink-mid: #4a4844; --ink-muted: #7a7872;
+    --accent: #2f6fa3; --danger: #b73f3f;
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Geist, Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .wrap { width: 100%; max-width: 460px; padding: 24px; text-align: center; }
+
+  /* Connecting spinner */
+  .probe { display: none; flex-direction: column; align-items: center; gap: 14px; color: var(--ink-muted); }
+  .probe.is-visible { display: flex; }
+  .spinner {
+    width: 24px; height: 24px; border-radius: 50%;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .probe-text { font-size: 12.5px; letter-spacing: 0.02em; }
+
+  /* Offline UI */
+  .offline { display: none; }
+  .offline.is-visible { display: block; }
+  .offline-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 24px;
+  }
+  .offline-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 48px; height: 48px; margin-bottom: 14px;
+  }
+  .offline-mark svg { width: 100%; height: 100%; display: block; }
+  .offline h1 { font-size: 16px; margin: 0 0 6px; font-weight: 600; }
+  .offline p { margin: 0 0 16px; color: var(--ink-mid); line-height: 1.5; }
+  .start-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 132px;
+    padding: 9px 18px;
+    border-radius: 8px;
+    background: var(--ink); color: var(--bg-elev);
+    text-decoration: none;
+    font-size: 13px; font-weight: 500;
+  }
+  .start-btn:hover { opacity: 0.92; }
+  .start-btn.is-launching { pointer-events: none; opacity: 0.85; }
+  .start-btn-spinner {
+    display: none;
+    width: 13px; height: 13px; border-radius: 50%;
+    border: 1.6px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    animation: spin 0.8s linear infinite;
+  }
+  .start-btn.is-launching .start-btn-spinner { display: inline-block; }
+  .fallback {
+    margin-top: 16px; font-size: 12px; color: var(--ink-muted);
+    text-align: left;
+  }
+  .fallback summary {
+    cursor: pointer; text-align: center;
+    padding: 6px; user-select: none;
+  }
+  .fallback summary:hover { color: var(--ink-mid); }
+  .fallback pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 8px 0;
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    overflow-x: auto;
+  }
+  em { color: var(--ink-mid); font-style: normal; font-weight: 500; }
+
+  /* Soft error (probed once but redirect target missing) */
+  .err { color: var(--danger); font-size: 12px; margin-top: 12px; }
+
+  /* After a Start-click times out we assume boos isn't installed and
+     swap copy to nudge install. The default copy stays visible; we
+     just reveal an extra line. */
+  .install-nudge {
+    display: none;
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--ink-mid);
+    font-size: 12.5px;
+    line-height: 1.5;
+    text-align: left;
+  }
+  .offline.looks-uninstalled .install-nudge { display: block; }
+  .offline.looks-uninstalled .offline > p { display: none; }
+  .install-nudge code {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="probe" class="probe is-visible">
+    <div class="spinner" aria-hidden="true"></div>
+    <div class="probe-text">Connecting to boos…</div>
+  </div>
+
+  <div id="offline" class="offline">
+    <div class="offline-card">
+      <div class="offline-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32">
+          <rect x="2" y="4" width="28" height="24" rx="3" fill="#1a1815"/>
+          <line x1="2" y1="10" x2="30" y2="10" stroke="#faf9f5" stroke-width="0.6" opacity="0.45"/>
+          <circle cx="6"   cy="7" r="1" fill="#faf9f5"/>
+          <circle cx="9.5" cy="7" r="1" fill="#faf9f5" opacity="0.65"/>
+          <circle cx="13"  cy="7" r="1" fill="#faf9f5" opacity="0.4"/>
+          <text x="16" y="19.5" text-anchor="middle" dominant-baseline="central"
+                font-family="'Cascadia Mono', 'Consolas', 'Courier New', monospace"
+                font-weight="700" font-size="10" fill="#faf9f5">boos</text>
+        </svg>
+      </div>
+      <h1>Backend not running</h1>
+      <p>boos's local backend isn't reachable. Click Start to launch it —
+      Windows may ask for permission once. Tick <em>Always allow</em>
+      to silence future prompts.</p>
+      <a class="start-btn" href="boos://start" id="start-link">
+        <span class="start-btn-spinner" aria-hidden="true"></span>
+        <span class="start-btn-label">Start boos</span>
+      </a>
+      <div class="install-nudge">
+        Nothing happened? boos doesn't look installed on this machine. Install it once via npm, then click <em>Try Start again</em>:
+        <div style="margin-top:8px"><code>npm i -g @MistyBridge/boos</code></div>
+      </div>
+      <details class="fallback">
+        <summary>Don't have boos installed?</summary>
+        <p>Install once via npm, then come back here:</p>
+        <pre><code>npm i -g @MistyBridge/boos</code></pre>
+        <p>Or run a one-shot trial without installing:</p>
+        <pre><code>npx @MistyBridge/boos</code></pre>
+      </details>
+      <div id="err" class="err" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ───────────────────────────────────────────────────────────────────
+// BOOS version router · GH Pages root for /boos/
+//
+// Probes the locally-installed backend at http://localhost:7777/api/health,
+// then redirects to ./<backend.version>/ so the user always lands on a
+// frontend bundle that exactly matches their backend. Old versions are
+// archived permanently under /boos/<version>/ so an old backend keeps
+// working forever.
+//
+// While the backend is offline, polls every 2s so the redirect happens
+// automatically once the user clicks "Start boos" (or the heartbeat
+// watchdog re-spawns the server).
+// ───────────────────────────────────────────────────────────────────
+
+const HEALTH_URL = 'http://localhost:7777/api/health';
+const POLL_MS = 2000;
+
+const probeEl = document.getElementById('probe');
+const offlineEl = document.getElementById('offline');
+const errEl = document.getElementById('err');
+
+function showOffline(msg) {
+  probeEl.classList.remove('is-visible');
+  offlineEl.classList.add('is-visible');
+  if (msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
+  else { errEl.style.display = 'none'; }
+}
+
+async function probeOnce() {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1800);
+    // targetAddressSpace marks this as an intentional public→loopback call so
+    // PNA-aware browsers send the preflight (backend answers it) instead of
+    // hard-blocking. Some engines reject the unknown option synchronously, so
+    // fall back to a plain fetch.
+    let r;
+    try {
+      r = await fetch(HEALTH_URL, { cache: 'no-store', signal: ctrl.signal, targetAddressSpace: 'loopback' });
+    } catch {
+      r = await fetch(HEALTH_URL, { cache: 'no-store', signal: ctrl.signal });
+    }
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && j.version ? String(j.version) : null;
+  } catch { return null; }
+}
+
+function goToVersion(version) {
+  // Preserve any deep-link the user may have arrived with.
+  const tail = (location.search || '') + (location.hash || '');
+  const url = './' + encodeURIComponent(version) + '/' + tail;
+  location.replace(url);
+}
+
+// Try to silently launch the backend via boos:// — DISABLED. We used to
+// fire this on every cold page load. Even when the user had already
+// OK'd the protocol with "Always allow", some browsers still flash a
+// brief prompt; first-time visitors got an unexpected "Open boos.cmd?"
+// dialog with no apparent trigger. Bad UX. Keep the helper around in
+// case we want an opt-in "auto-start" toggle later, but never call it
+// without an explicit user click.
+function silentProtocolLaunch() {
+  try {
+    const f = document.createElement('iframe');
+    f.style.display = 'none';
+    f.src = 'boos://start';
+    document.body.appendChild(f);
+    setTimeout(() => { try { f.remove(); } catch {} }, 1500);
+  } catch {}
+}
+
+async function loop() {
+  const v = await probeOnce();
+  if (v) { goToVersion(v); return; }
+  // No backend on first probe — go straight to the offline card so the
+  // user sees the Start CTA and clicks it intentionally. Polling
+  // continues underneath in case they launch boos from a terminal /
+  // pinned shortcut instead.
+  showOffline(null);
+  setTimeout(loop, POLL_MS);
+}
+
+// Surface "started clicking" so we tighten the polling interval briefly
+// — the protocol handler usually has the server up within ~2-3s but the
+// first probe right after the click might still race. If the tight poll
+// runs out, we infer the protocol isn't registered (browsers don't
+// expose a direct API for that — privacy decision) and flip the card
+// over to an install hint.
+document.getElementById('start-link').addEventListener('click', () => {
+  const btn = document.getElementById('start-link');
+  const label = btn.querySelector('.start-btn-label');
+  btn.classList.add('is-launching');
+  if (label) label.textContent = 'Starting…';
+  let n = 0;
+  const tight = async () => {
+    if (n++ > 24) {                          // ~12s total
+      offlineEl.classList.add('looks-uninstalled');
+      btn.classList.remove('is-launching');
+      if (label) label.textContent = 'Try Start again';
+      const det = document.querySelector('.fallback');
+      if (det && !det.open) det.open = true;
+      return;
+    }
+    const v = await probeOnce();
+    if (v) { goToVersion(v); return; }
+    setTimeout(tight, 500);
+  };
+  setTimeout(tight, 800);
+});
+
+loop();
+</script>
+</body>
+</html>
