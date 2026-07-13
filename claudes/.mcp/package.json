@@ -1,0 +1,10 @@
+{
+  "name": "boos-mcp-local",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local MCP servers for BOOS project agents",
+  "dependencies": {
+    "@modelcontextprotocol/server-sequential-thinking": "^2026.1.14",
+    "@modelcontextprotocol/server-github": "^2026.1.14"
+  }
+}

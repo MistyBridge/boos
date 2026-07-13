@@ -1,0 +1,57 @@
+{
+  "root": true,
+  "env": {
+    "node": true,
+    "es2024": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2024,
+    "sourceType": "script"
+  },
+  "extends": ["eslint:recommended"],
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-undef": "error",
+    "no-var": "warn",
+    "prefer-const": "warn",
+    "no-console": "off",
+    "no-constant-condition": ["error", { "checkLoops": false }],
+    "eqeqeq": ["warn", "always", { "null": "ignore" }],
+    "no-throw-literal": "error",
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-loop-func": "warn",
+    "no-return-await": "warn",
+    "require-await": "warn",
+    "no-unused-expressions": "warn",
+    "no-duplicate-imports": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["public/js/**/*.js"],
+      "env": {
+        "browser": true,
+        "node": false,
+        "es2024": true
+      },
+      "parserOptions": {
+        "sourceType": "module"
+      },
+      "globals": {
+        "preact": "readonly",
+        "htm": "readonly",
+        "xterm": "readonly"
+      }
+    },
+    {
+      "files": ["tests/**/*.js"],
+      "env": {
+        "node": true,
+        "es2024": true
+      },
+      "rules": {
+        "no-unused-expressions": "off"
+      }
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "name": "@mistybridge/boos",
+  "version": "1.0.0",
+  "description": "Claude Code Session Manager — Windows web UI to manage many concurrent claude sessions: live list, snapshot/restore, focus existing window, new session in an isolated workspace with repo clones",
+  "license": "MIT",
+  "main": "server.js",
+  "bin": {
+    "boos": "bin/boos.js"
+  },
+  "files": [
+    "server.js",
+    "bin/",
+    "lib/",
+    "public/",
+    "scripts/",
+    "README.md",
+    "CLAUDE.md"
+  ],
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node scripts/dev.js",
+    "test": "node --test tests/**/*.test.js",
+    "test:coverage": "c8 node --test tests/**/*.test.js",
+    "test:e2e": "node --test tests/e2e/smoke.test.js",
+    "test:e2e:playwright": "npx playwright test --config tests/e2e/playwright.config.js",
+    "bench:pty": "node tests/bench/pty-spawn.bench.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "postinstall": "node scripts/install.js",
+    "preuninstall": "node scripts/uninstall.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "win32"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "session-manager",
+    "windows",
+    "windows-terminal"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MistyBridge/boos.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MistyBridge/boos/issues"
+  },
+  "homepage": "https://github.com/MistyBridge/boos#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.5"
+  }
+}

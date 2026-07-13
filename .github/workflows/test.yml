@@ -1,0 +1,245 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── cross-platform install/launcher script validation ─────────────────
+  platform-scripts:
+    name: Platform scripts (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── common: syntax-check all scripts with bash -n ────────────────
+      - name: Syntax check (bash -n)
+        run: |
+          set -e
+          for script in \
+            scripts/install-darwin.sh \
+            scripts/install-linux.sh \
+            scripts/uninstall-darwin.sh \
+            scripts/uninstall-linux.sh \
+            scripts/launcher.sh
+          do
+            echo "::group::$script"
+            bash -n "$script" && echo "  OK"
+            echo "::endgroup::"
+          done
+
+      # ── macOS: validate install-darwin.sh template output ─────────────
+      - name: Darwin — validate Info.plist template
+        if: runner.os == 'macOS'
+        run: |
+          set -e
+          BOOS_NO_AUTOLAUNCH=1 bash scripts/install-darwin.sh /bin/bash 2>&1 || true
+
+          PLIST="$HOME/Library/Application Support/boos/boos-helper.app/Contents/Info.plist"
+
+          if [ -f "$PLIST" ]; then
+            echo "  Info.plist exists"
+
+            for key in CFBundleName CFBundleIdentifier CFBundleExecutable CFBundleURLTypes; do
+              if grep -q "<key>$key</key>" "$PLIST"; then
+                echo "  ✓ $key present"
+              else
+                echo "  ✗ $key MISSING"
+                exit 1
+              fi
+            done
+
+            if grep -q "<string>boos</string>" "$PLIST"; then
+              echo "  ✓ boos:// URL scheme present"
+            else
+              echo "  ✗ boos:// URL scheme MISSING"
+              exit 1
+            fi
+
+            LAUNCHER="$HOME/Library/Application Support/boos/launcher.sh"
+            if [ -x "$LAUNCHER" ]; then
+              echo "  ✓ launcher.sh is executable"
+            else
+              echo "  ✗ launcher.sh not executable"
+              exit 1
+            fi
+          else
+            echo "  ✗ Info.plist not generated"
+            exit 1
+          fi
+
+      # ── Linux: validate install-linux.sh template output ──────────────
+      - name: Linux — validate .desktop template
+        if: runner.os == 'Linux'
+        run: |
+          set -e
+          BOOS_NO_AUTOLAUNCH=1 bash scripts/install-linux.sh /bin/bash 2>&1 || true
+
+          DESKTOP="$HOME/.local/share/applications/boos.desktop"
+
+          if [ -f "$DESKTOP" ]; then
+            echo "  .desktop file exists"
+
+            for key in "Type=Application" "Name=BOOS" "MimeType=x-scheme-handler/boos" "NoDisplay=true"; do
+              if grep -qF "$key" "$DESKTOP"; then
+                echo "  ✓ '$key' present"
+              else
+                echo "  ✗ '$key' MISSING"
+                exit 1
+              fi
+            done
+
+            if grep -q "Exec=.*launcher.sh" "$DESKTOP"; then
+              echo "  ✓ Exec references launcher.sh"
+            else
+              echo "  ✗ Exec does NOT reference launcher.sh"
+              exit 1
+            fi
+
+            LAUNCHER="$HOME/.local/share/boos/launcher.sh"
+            if [ -x "$LAUNCHER" ]; then
+              echo "  ✓ launcher.sh is executable"
+            else
+              echo "  ✗ launcher.sh not executable"
+              exit 1
+            fi
+          else
+            echo "  ✗ .desktop file not generated"
+            exit 1
+          fi
+
+      # ── macOS: validate uninstall reverses install ──────────────────
+      - name: Darwin — install then uninstall cycle
+        if: runner.os == 'macOS'
+        run: |
+          set -e
+
+          # Install.
+          BOOS_NO_AUTOLAUNCH=1 bash scripts/install-darwin.sh /bin/bash 2>&1 || true
+
+          PLIST="$HOME/Library/Application Support/boos/boos-helper.app/Contents/Info.plist"
+          LAUNCHER="$HOME/Library/Application Support/boos/launcher.sh"
+
+          if [ ! -f "$PLIST" ]; then echo "  ✗ install failed — Info.plist not created"; exit 1; fi
+          echo "  ✓ install created Info.plist"
+
+          # Uninstall (force, no prompt).
+          bash scripts/uninstall-darwin.sh --force 2>&1 || true
+
+          if [ -f "$PLIST" ]; then echo "  ✗ uninstall failed — Info.plist still exists"; exit 1; fi
+          echo "  ✓ uninstall removed Info.plist"
+
+          if [ -f "$LAUNCHER" ]; then echo "  ✗ uninstall failed — launcher.sh still exists"; exit 1; fi
+          echo "  ✓ uninstall removed launcher.sh"
+
+          if [ -d "$HOME/Library/Application Support/boos/boos-helper.app" ]; then
+            echo "  ✗ uninstall failed — .app bundle still exists"; exit 1
+          fi
+          echo "  ✓ uninstall removed .app bundle"
+
+      # ── Linux: validate uninstall reverses install ──────────────────
+      - name: Linux — install then uninstall cycle
+        if: runner.os == 'Linux'
+        run: |
+          set -e
+
+          # Install.
+          BOOS_NO_AUTOLAUNCH=1 bash scripts/install-linux.sh /bin/bash 2>&1 || true
+
+          DESKTOP="$HOME/.local/share/applications/boos.desktop"
+          LAUNCHER="$HOME/.local/share/boos/launcher.sh"
+
+          if [ ! -f "$DESKTOP" ]; then echo "  ✗ install failed — .desktop not created"; exit 1; fi
+          echo "  ✓ install created .desktop"
+
+          # Uninstall (force, no prompt).
+          bash scripts/uninstall-linux.sh --force 2>&1 || true
+
+          if [ -f "$DESKTOP" ]; then echo "  ✗ uninstall failed — .desktop still exists"; exit 1; fi
+          echo "  ✓ uninstall removed .desktop"
+
+          if [ -f "$LAUNCHER" ]; then echo "  ✗ uninstall failed — launcher.sh still exists"; exit 1; fi
+          echo "  ✓ uninstall removed launcher.sh"
+
+      # ── launcher.sh static analysis ───────────────────────────────────
+      - name: Launcher — static analysis
+        run: |
+          set -e
+
+          REQUIRED=(
+            "_open_browser"
+            "HEALTH_URL"
+            "MistyBridge.github.io/boos/"
+            "nohup"
+            "disown"
+            "uname -s"
+          )
+
+          for pattern in "${REQUIRED[@]}"; do
+            if grep -qF "$pattern" scripts/launcher.sh; then
+              echo "  ✓ contains: $pattern"
+            else
+              echo "  ✗ MISSING: $pattern"
+              exit 1
+            fi
+          done
+
+      # ── uninstall scripts static analysis ──────────────────────────
+      - name: Uninstall scripts — static analysis
+        run: |
+          set -e
+
+          echo "::group::uninstall-darwin.sh"
+          for pattern in \
+            "lsregister" \
+            "unregistered from Launch Services" \
+            "rm -rf" \
+            "boos-helper.app" \
+            "launcher.sh"
+          do
+            if grep -qF "$pattern" scripts/uninstall-darwin.sh; then
+              echo "  ✓ contains: $pattern"
+            else
+              echo "  ✗ MISSING: $pattern"
+              exit 1
+            fi
+          done
+          echo "::endgroup::"
+
+          echo "::group::uninstall-linux.sh"
+          for pattern in \
+            "xdg-mime" \
+            "boos.desktop" \
+            "rm -f" \
+            "update-desktop-database" \
+            "launcher.sh"
+          do
+            if grep -qF "$pattern" scripts/uninstall-linux.sh; then
+              echo "  ✓ contains: $pattern"
+            else
+              echo "  ✗ MISSING: $pattern"
+              exit 1
+            fi
+          done
+          echo "::endgroup::"
+
+      # ── optional: shellcheck if available ─────────────────────────────
+      - name: ShellCheck (if available)
+        continue-on-error: true
+        run: |
+          if command -v shellcheck > /dev/null 2>&1; then
+            shellcheck scripts/install-darwin.sh
+            shellcheck scripts/install-linux.sh
+            shellcheck scripts/uninstall-darwin.sh
+            shellcheck scripts/uninstall-linux.sh
+            shellcheck scripts/launcher.sh
+          else
+            echo "shellcheck not installed — skipping (bash -n already passed)"
+          fi

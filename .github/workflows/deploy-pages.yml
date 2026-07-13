@@ -1,0 +1,96 @@
+name: Deploy frontend to GitHub Pages
+
+# Deploys two things to gh-pages:
+#   /                — version-router (pages-root/) · static
+#   /<pkg.version>/  — full per-version frontend (public/)
+#
+# The router probes the locally-installed backend at /api/health and
+# redirects to whichever version matches. Old versions stay forever via
+# `keep_files: true` so users on stale backends keep working.
+#
+# Per-version index.html gets a <meta name="boos-frontend-version">
+# injected at build time. The frontend uses this on boot to detect
+# "backend has been upgraded since I was loaded" and bounce through the
+# router again.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/**'
+      - 'pages-root/**'
+      - 'package.json'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read package version
+        id: ver
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Deploying frontend version: $v"
+
+      - name: Stage router + per-version frontend
+        run: |
+          set -eu
+          v="${{ steps.ver.outputs.version }}"
+          mkdir -p "out/$v"
+          cp -r public/. "out/$v/"
+          # Bake the version into the per-version index so the running
+          # frontend can detect "backend was upgraded under me" and bounce
+          # back through the router. Use node for the rewrite (already on
+          # the runner; avoids sed delimiter gymnastics around <meta charset>).
+          node -e "
+            const fs=require('fs');
+            const p='out/$v/index.html';
+            const html=fs.readFileSync(p,'utf8');
+            const tag='<meta name=\"boos-frontend-version\" content=\"$v\">';
+            if (html.includes('boos-frontend-version')) { process.exit(0); }
+            const next=html.replace(/(<meta charset=\"utf-8\"\s*\/?>)/i, '\$1\n    '+tag);
+            if (next === html) { console.error('meta injection failed'); process.exit(1); }
+            fs.writeFileSync(p, next);
+          "
+          grep -n 'boos-frontend-version' "out/$v/index.html"
+          # Router lives at root
+          cp -r pages-root/. out/
+          # Bake the package version into the root PWA manifest so
+          # Windows "Installed apps" + Chromium app management show
+          # something other than the default 1.0.0. Per-version pages
+          # link at ../manifest.webmanifest (the root one) so the
+          # installed PWA is scoped to /boos/ and a redirect between
+          # versions stays in-scope (no surprise address bar).
+          node -e "
+            const fs=require('fs');
+            const p='out/manifest.webmanifest';
+            if (fs.existsSync(p)) {
+              const j=JSON.parse(fs.readFileSync(p,'utf8'));
+              j.version='$v';
+              fs.writeFileSync(p, JSON.stringify(j, null, 2));
+              console.log('wrote',p,'version=$v');
+            }
+          "
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./out
+          keep_files: true
+          force_orphan: false
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'deploy ${{ steps.ver.outputs.version }} · ${{ github.sha }}'

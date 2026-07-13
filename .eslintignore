@@ -1,0 +1,5 @@
+node_modules
+.claude
+coverage
+.nyc_output
+pages-root

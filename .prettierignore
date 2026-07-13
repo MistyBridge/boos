@@ -1,0 +1,8 @@
+node_modules
+.claude
+~/.boos
+*.log
+coverage
+.nyc_output
+public/
+pages-root/

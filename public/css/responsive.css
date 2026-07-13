@@ -1,0 +1,177 @@
+/* Narrow viewports: force-collapse sidebar, single-col config grid */
+
+/* Narrow desktop / tablet viewports: stack the page-head, single-column
+   config grids. Sidebar stays at full width — user can still toggle it
+   manually via the collapse button. Phone-sized (≤ 640px) gets the FAB
+   drawer treatment below. */
+@media (max-width: 900px) {
+  .main { padding: 0 var(--s-4); }
+  .page-head { flex-direction: column; gap: var(--s-3); }
+  .config-grid { grid-template-columns: 1fr; }
+}
+
+/* Tablet + phone viewports (≤768px): sidebar becomes a full-screen drawer
+   toggled by a fixed FAB. Phone-only (≤640px) refinements follow below. */
+@media (max-width: 768px) {
+  /* Shrink the whole app to the visible area ABOVE the soft keyboard.
+     --app-vh is the visualViewport height (main.js); the layout-viewport
+     100vh never shrinks for the keyboard, which left the terminal's bottom
+     rows hidden behind it. 100dvh is the fallback before the JS runs. */
+  .app.is-mobile { grid-template-columns: 1fr !important; height: var(--app-vh, 100dvh); }
+  /* Keyboard up: keep the terminal's content above the floating key bar
+     (TerminalKeyBar, ~50px). Only the terminal pane needs this — other
+     pages have their own scroll padding. */
+  body.kb-open .app.is-mobile .session-pane-body { padding-bottom: 50px; }
+  .app.is-mobile .sidebar {
+    /* Collapsed (drawer closed): out of the flow + invisible. */
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    width: 100%;
+    height: 100%;
+    transform: translateX(-100%);
+    transition: transform .22s cubic-bezier(.4, 0, .2, 1);
+    padding: var(--s-3);
+    background: var(--bg);
+    border-right: 0;
+    overflow-y: auto;
+  }
+  .app.is-mobile.drawer-open .sidebar { transform: translateX(0); }
+  /* Brand + nav labels come BACK on mobile — they were hidden by the
+     900px collapse rule above. */
+  .app.is-mobile .brand-name,
+  .app.is-mobile .nav-label,
+  .app.is-mobile .nav-badge { opacity: 1; pointer-events: auto; }
+  /* Sidebar drag handle isn't useful at full-screen; close button isn't
+     either since the FAB doubles as a toggle. */
+  .app.is-mobile .sidebar [aria-label="resize sidebar"] { display: none; }
+  .app.is-mobile .collapse-toggle { display: none; }
+
+  /* Main pane occupies full width — no sidebar gutter. */
+  .app.is-mobile .main { padding: 0 var(--s-3); }
+  /* Session pane edge-to-edge margin needs to match the new padding. */
+  .app.is-mobile .session-pane { margin: 0 calc(-1 * var(--s-3)); }
+
+  /* The bottom-left FAB (52px circle + 16px margin) overlaps content
+     near the bottom-left corner. Reserve room inside scroll containers
+     so the last button / row isn't trapped under it. */
+  .app.is-mobile .settings-scroll { padding-bottom: 80px; }
+  .app.is-mobile .remote-page     { padding-bottom: 80px; }
+  /* Launch page is its own block (no scroll wrapper) — push it up too
+     so the Launch button doesn't end up under the FAB. */
+  .app.is-mobile [data-panel="launch"]   { padding-bottom: 80px; }
+  .app.is-mobile [data-panel="about"]    { padding-bottom: 80px; }
+  /* Sessions terminal: the .session-actions footer / tabs at top means
+     the FAB sits over the terminal corner — leave it; the user can
+     scroll the terminal independently. */
+
+  /* Long inline code (URLs, paths) in the About / Remote bodies break
+     out of card edges on a narrow viewport. Let them wrap on any
+     character instead of stretching the line. */
+  .settings-section code,
+  .card code,
+  .remote-fact code {
+    word-break: break-all;
+    white-space: normal;
+  }
+}
+
+/* Phone viewports (≤640px): refinements on top of the 768px tablet
+   drawer mode — touch scrolling for terminal, anti-zoom for form
+   inputs. FAB styles are unconditional below (MobileNavFab gates
+   rendering via JS). */
+@media (max-width: 640px) {
+  /* Touch scrolling: drive xterm's OWN scrollable .xterm-viewport natively
+     so finger drags get real momentum. */
+  .app.is-mobile .terminal-host .xterm-screen { pointer-events: none; }
+  .app.is-mobile .terminal-host .xterm-viewport { touch-action: pan-y; }
+
+  /* Anti-zoom: iOS Safari + Edge auto-zoom when font-size < 16px. */
+  .input,
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="number"],
+  input[type="password"],
+  input[type="url"],
+  textarea,
+  select { font-size: 16px !important; }
+}
+
+/* ── FAB + backdrop ────────────────────────────────────────────────
+   Positioned outside any media query — MobileNavFab.js conditionally
+   renders them when `isMobile.value` is true. Inline left/bottom
+   coords come from the component. */
+.mobile-nav-fab {
+  position: fixed;
+  z-index: 220;                 /* above the terminal key bar (215) */
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 10px 24px -6px rgba(0,0,0,.28),
+    0 2px 4px rgba(0,0,0,.10);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  transition: box-shadow .15s, background .15s, transform .18s ease;
+}
+body.kb-open .mobile-nav-fab { transform: translateY(-60px); }
+.mobile-nav-fab:hover  { background: var(--bg); }
+.mobile-nav-fab:active { cursor: grabbing; }
+.mobile-nav-fab:focus,
+.mobile-nav-fab:focus-visible { outline: none; }
+.mobile-nav-fab { -webkit-tap-highlight-color: transparent; }
+.mobile-nav-fab svg { width: 22px; height: 22px; stroke-width: 2; pointer-events: none; }
+.mobile-nav-fab.is-open {
+  background: var(--bg-elev);
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+.mobile-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 199;     /* below sidebar (200) + fab (220), above content */
+  background: rgba(26, 24, 21, 0.45);
+  backdrop-filter: blur(2px);
+  animation: panel-in .15s ease-out;
+}
+
+/* Launch FAB — fixed bottom-right "+" button displayed alongside the
+   navigation FAB on tablet/phone. ink bg + white icon, jumps to Launch. */
+.mobile-launch-fab {
+  position: fixed;
+  z-index: 220;
+  right: 16px;
+  bottom: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--ink);
+  color: var(--bg-elev);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 10px 24px -6px rgba(0,0,0,.28),
+    0 2px 4px rgba(0,0,0,.10);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  transition: box-shadow .15s, transform .18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-launch-fab:hover  { box-shadow: 0 12px 28px -6px rgba(0,0,0,.35); }
+.mobile-launch-fab:active { transform: scale(0.94); }
+.mobile-launch-fab:focus,
+.mobile-launch-fab:focus-visible { outline: none; }
+.mobile-launch-fab svg { width: 24px; height: 24px; stroke-width: 2.5; pointer-events: none; }
+body.kb-open .mobile-launch-fab { transform: translateY(-60px); }
+body.kb-open .mobile-launch-fab:active { transform: translateY(-60px) scale(0.94); }

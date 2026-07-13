@@ -1,0 +1,249 @@
+/* ── Workspace page layout ──────────────────────────────────────── */
+.workspace-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.workspace-canvas-pane {
+  position: relative;
+  overflow: hidden;
+  min-height: 80px;
+  background: var(--bg, #faf9f5);
+  border-bottom: 1px solid var(--border, #e8e3d5);
+}
+
+.workspace-terminal-pane {
+  position: relative;
+  min-height: 100px;
+  overflow: hidden;
+  background: var(--ink, #1a1815);
+}
+
+/* ── split handle ───────────────────────────────────────────────── */
+.workspace-split-handle {
+  height: 6px;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--border, #e8e3d5);
+  flex-shrink: 0;
+  user-select: none;
+}
+.workspace-split-handle:hover {
+  background: var(--accent, #b3614a);
+}
+.workspace-split-handle:active {
+  background: var(--accent, #b3614a);
+}
+
+.workspace-split-grip {
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ink-muted, #8c8a85);
+}
+.workspace-split-handle:hover .workspace-split-grip {
+  background: #fff;
+}
+
+/* ── canvas ─────────────────────────────────────────────────────── */
+.workspace-canvas {
+  position: absolute;
+  inset: 0;
+  /* transform set inline for pan/zoom */;
+}
+
+.workspace-canvas-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-muted, #8c8a85);
+  font-size: 14px;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ── agent node ─────────────────────────────────────────────────── */
+.agent-node {
+  position: absolute;
+  width: 140px;
+  min-height: 56px;
+  background: var(--bg-elev, #ffffff);
+  border: 2px solid var(--border, #e8e3d5);
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  cursor: grab;
+  user-select: none;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s ease, opacity 0.2s;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 1;
+}
+.agent-node:active {
+  cursor: grabbing;
+  z-index: 10;
+}
+/* Touch-drag active state — boosted z-index + subtle lift. */
+.agent-node.is-dragging {
+  cursor: grabbing;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+/* ── node title (semi-transparent overlay, matches BOOS session-title style) ── */
+.agent-node-title {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--ink, #1a1815);
+  opacity: 0.5;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.agent-node-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.agent-node-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--ink-mid, #5c5a55);
+}
+.agent-node-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.agent-node-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink, #1a1815);
+  text-align: center;
+  line-height: 1.2;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── status dot ─────────────────────────────────────────────────── */
+.agent-node-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  background: var(--ink-faint, #b8b5b0);
+}
+
+/* ── status: working (green + pulse) ────────────────────────────── */
+.agent-node.is-working {
+  border-color: #4a8a4a;
+  box-shadow: 0 0 8px rgba(74, 138, 74, 0.25);
+}
+.agent-node.is-working .agent-node-status-dot {
+  background: #4a8a4a;
+  animation: agent-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 138, 74, 0.4); }
+  50%      { opacity: 0.6; box-shadow: 0 0 0 6px rgba(74, 138, 74, 0); }
+}
+
+/* ── status: idle (gray) ────────────────────────────────────────── */
+.agent-node.is-idle {
+  border-color: var(--border, #e8e3d5);
+}
+.agent-node.is-idle .agent-node-status-dot {
+  background: var(--ink-faint, #b8b5b0);
+}
+
+/* ── status: exited (dark gray, dimmed) ─────────────────────────── */
+.agent-node.is-exited {
+  border-color: var(--border, #e8e3d5);
+  opacity: 0.5;
+}
+.agent-node.is-exited .agent-node-status-dot {
+  background: var(--ink-muted, #8c8a85);
+}
+
+/* ── selected state ─────────────────────────────────────────────── */
+.agent-node.is-selected {
+  border-color: var(--accent, #b3614a);
+  box-shadow: 0 0 0 3px var(--accent-soft, rgba(47, 111, 163, 0.15)),
+              0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: scale(1.04);
+  z-index: 5;
+}
+
+/* ── terminal area ──────────────────────────────────────────────── */
+.workspace-terminal-pane {
+  position: relative;
+  min-height: 100px;
+  background: var(--ink, #1a1815);
+  overflow: hidden;
+}
+/* Match BOOS's session-pane-body pattern for xterm rendering */
+.workspace-terminal-pane .session-pane-body,
+.workspace-terminal-pane .terminal-stack,
+.workspace-terminal-pane .terminal-layer {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+.workspace-terminal-pane .terminal-layer {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.workspace-terminal-pane .terminal-layer.is-active {
+  opacity: 1;
+}
+.workspace-terminal-pane .terminal-host {
+  height: 100%;
+}
+
+.workspace-terminal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--ink-muted, #8c8a85);
+  background: var(--ink, #1a1815);
+  font-size: 14px;
+}
+
+.terminal-empty-icon {
+  font-size: 32px;
+  opacity: 0.3;
+}
+
+.workspace-terminal-active {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+.workspace-terminal-active .terminal-instance,
+.workspace-terminal-active .terminal-instance .terminal-host {
+  height: 100%;
+}

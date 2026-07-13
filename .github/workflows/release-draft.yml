@@ -1,0 +1,34 @@
+name: Draft GitHub Release on tag push
+
+# When you push a v*.*.* tag (typically from `npm version <patch|minor|major>`),
+# auto-create a draft GitHub Release with notes generated from the merged PRs
+# / commits since the last tag. You review the notes in the UI, edit if
+# needed, then hit Publish — which fires npm-publish.yml.
+#
+# This decouples "I'm done bumping the version" (just push tag) from "I
+# want this on npm" (click Publish on the Release page). Safer than full
+# push-to-publish.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gh release needs full history for --generate-notes
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --draft \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes

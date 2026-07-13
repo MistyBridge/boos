@@ -1,0 +1,54 @@
+{
+  "skills": {
+    "autoLoad": true,
+    "paths": [
+      "D:/AI IDE/CC_BOOS/claudes/可靠性工程师/.claude/skills"
+    ]
+  },
+  "mcpServers": {
+    "filesystem": {
+      "command": "node",
+      "args": [
+        "D:/AI IDE/CC_BOOS/claudes/.mcp/filesystem/dist/index.js",
+        "D:/AI IDE/CC_BOOS"
+      ],
+      "description": "Filesystem operations - test files and fixtures"
+    },
+    "playwright": {
+      "command": "node",
+      "args": [
+        "D:/AI IDE/CC_BOOS/claudes/.mcp/playwright/cli.js"
+      ],
+      "description": "Browser automation - E2E testing"
+    },
+    "fetch": {
+      "command": "node",
+      "args": [
+        "D:/AI IDE/CC_BOOS/claudes/.mcp/fetch/build/index.js"
+      ],
+      "description": "API endpoint verification"
+    },
+    "sequential-thinking": {
+      "command": "node",
+      "args": [
+        "D:/AI IDE/CC_BOOS/claudes/.mcp/node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"
+      ],
+      "description": "Test strategy and edge case design"
+    },
+    "github": {
+      "command": "node",
+      "args": [
+        "D:/AI IDE/CC_BOOS/claudes/.mcp/node_modules/@modelcontextprotocol/server-github/dist/index.js"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "your_github_token_here"
+      },
+      "description": "GitHub - CI/CD integration and PR test status"
+    },
+    "agent-bus": {
+      "type": "sse",
+      "url": "http://127.0.0.1:7777/mcp/sse",
+      "description": "Agent间任务通信 — 接收测试任务、报告结果"
+    }
+  }
+}
