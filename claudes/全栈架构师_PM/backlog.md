@@ -204,7 +204,8 @@ _(无)_
 | Sprint 3 | 2026-07-14 | 15 | 15 ✅ | 0 |
 | Sprint 4 | 2026-07-14 | 11 | 11 ✅ | 0 |
 | Sprint 5 | 2026-07-13 | 18 | 18 ✅ | 0 |
-| **累计** | | **73** | **73** | **0** |
+| Sprint 6 | 2026-07-13 | 13 | 0 | 0 |
+| **累计** | | **86** | **73** | **0** |
 
 ### 测试体系
 
@@ -273,3 +274,33 @@ E2E (Playwright):  31 pass / 0 fail  (7 spec files)
 | 生命周期 Phase 4 (BOOS_LAUNCHER) | 4 | ✅ |
 | CI matrix 补全 (macOS/Linux) | 4 | ✅ |
 | Agent-Bus 自主协作平台 | 5 | ✅ |
+| v1.0.0 Release & 生产就绪 | 6 | 📋 |
+
+---
+
+## Sprint 6 — 📋 进行中
+
+**主题**: v1.0.0 正式发布 — 从功能完备到生产就绪
+
+**目标**: CHANGELOG + tag + 跨平台 CI 全绿 + 文档同步
+
+### PM (Tech Lead)
+
+| # | 任务 | 产出 | 优先级 | 状态 |
+|---|------|------|:--:|:--:|
+| 74 | CHANGELOG v1.0.0 — 汇总 Sprint 1-5 | CHANGELOG.md | P0 | 📋 |
+| 75 | git tag v1.0.0 + GitHub Release draft | tag + notes | P0 | 📋 |
+| 76 | architecture.md 同步 — 更新行数/路由数 | 文档 | P1 | 📋 |
+| 77 | CI unit-tests matrix — 3 OS × 2 Node | .github/workflows/test.yml | P0 | ✅ |
+
+### Agent-Bus 调度
+
+所有 4 名团队成员已注册到 agent-bus（workspace: boos），PM 已派发 3 个 Sprint 6 任务：
+
+| Agent | UID | 任务 | 状态 |
+|-------|-----|------|:--:|
+| 前端工程师 | agent_mrj1m3cf_imy4io | 冒烟重跑 + Canvas 兼容性 | 📋 |
+| 平台集成工程师 | agent_mrj1m3dy_mpuz61 | install E2E + terminal_list | 📋 |
+| 可靠性工程师 | agent_mrj1m3fg_5zh4uh | CI 验证 + 全链路冒烟 + code review | 📋 |
+
+任务文件同时写入各团队目录: `claudes/<role>/TASKS.md`

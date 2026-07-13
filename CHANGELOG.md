@@ -1,5 +1,77 @@
 # Changelog
 
+## 1.0.0 (2026-07-13)
+
+Brand-new architecture: `@MistyBridge/boos` — a complete rewrite from
+`@bakapiano/ccsm`. The frontend/backend version-pinning model and
+git-based workspace cloning are the only survivors; everything else is
+new.
+
+### Server: monolithic → modular (Sprints 1–4)
+- **server.js**: 2,311 → 496 lines (-78%)
+- **routes/** (11 files): config, sessions, sessions-launch, workspaces,
+  health, version, tunnel, devices, folders, decisions, dev
+- **lib/ helpers**: cliHelpers (183 lines), sessionHelpers (248 lines),
+  browserLauncher (135 lines) — extracted from server.js
+- **middleware**: asyncH, CORS, deviceGate, hostOnlyGate → `lib/middleware.js`
+
+### Agent-Bus: embedded multi-agent platform (Sprint 5)
+- **lib/agentBus/** (6 files): transport (SSE/JSON-RPC), handlers,
+  queue, registry, store, schemas, notifications
+- MCP-compatible: `/mcp/sse` + `/mcp/message` (JSON-RPC 2.0) + `/mcp/health`
+- REST bridge: `/mcp/api/call` for agents without SSE support
+- 20 MCP tools: register_agent, send_task, check_inbox, respond_task,
+  list_agents, broadcast, workflow define/activate, decision CRUD, etc.
+- Supervisor/Worker role model with permission gating
+
+### Workflow Engine (Sprint 5)
+- **DAG workflow engine**: define → addStage → addDependency → activate
+- Topological sort, cycle detection, capability-based auto-dispatch
+- Stage completion callbacks + parallel execution where DAG allows
+
+### Decision System (Sprint 5)
+- **MD file-based decision system**: REST API + file persistence
+- 飞书 webhook integration (HMAC-SHA256 signing) for emergency wake-up
+- DecisionsPage UI with review/approve/reject workflow
+
+### Lifecycle: browser-independent server
+- Browser close no longer kills the server (Phase 1–4 complete)
+- idleWatcher: 30min auto-shutdown when no sessions/heartbeat/MCP connections
+- Heartbeat watchdog respects live PTY sessions
+- `BOOS_LAUNCHER` deprecated; heartbeat always-on
+
+### Security hardening (Sprint 3)
+- `crypto.randomUUID()` replaces `Math.random()` for session IDs
+- `/mcp/*` SSE endpoints gated by host-only middleware
+- Heartbeat watchdog checks live PTY sessions before shutdown
+- Broadcast rate-limiting (60s/10 sliding window)
+- Task content sanitization (ANSI strip + 64KB truncation)
+
+### Cross-platform (Sprint 2–4)
+- macOS: `install-darwin.sh` — Info.plist + CFBundleURLTypes + Launch Services
+- Linux: `install-linux.sh` — .desktop + MimeType + xdg-utils
+- Uninstall scripts for both platforms
+- CI validates install→uninstall cycles on macOS + Linux runners
+
+### Tests & CI
+- **173 tests / 0 fail**: 142 unit (node:test) + 31 E2E (Playwright)
+- CI matrix: 3 OS × 2 Node versions for unit tests
+- Platform script validation on macOS + Linux
+- E2E: health, sessions, config, launch, lifecycle, terminal-ws, version
+
+### Frontend
+- 6 pages: Sessions, Launch, Configure, About, Remote, Workspace
+- 30+ components: TerminalView, AgentCanvas, AgentNode, SearchBar, etc.
+- 15 CSS files with Design Tokens (warm cream palette, Geist + JetBrains Mono)
+- PWA: Window Controls Overlay, Service Worker, install prompt
+- Mobile: FAB, drawer sidebar, touch drag
+
+### New dependencies
+- `express` (runtime)
+- `ws`, `node-pty` (peer)
+
+---
+
 ## 0.22.15
 
 ### Changed
