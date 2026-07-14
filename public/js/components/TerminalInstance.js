@@ -68,6 +68,7 @@ export class TerminalInstance {
     this.setVisible(this._isHostVisible());
     this._connect();
     if (this.isVisible) this.xterm.focus();
+    this.xterm.startAtlasRefresh(30000);
   }
 
   sendInput(data) {
@@ -136,7 +137,12 @@ export class TerminalInstance {
 
     if (nextVisible) {
       this.resizeDebouncer.flush();
-      this.scheduleLayout({ immediate: true, retries: true, forceRedraw: true });
+      this.scheduleLayout({ immediate: true, retries: true, forceRedraw: false });
+      // Tab switch → delay forceRedraw 300ms to let layout settle, then
+      // clear the WebGL glyph atlas for crisp text.
+      if (didChange) {
+        setTimeout(() => this.xterm.forceRedraw(), 300);
+      }
       if (this.pendingThemeRefresh) {
         this.pendingThemeRefresh = false;
         this._scheduleThemeRefreshForCli();

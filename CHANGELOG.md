@@ -8,8 +8,8 @@ git-based workspace cloning are the only survivors; everything else is
 new.
 
 ### Server: monolithic → modular (Sprints 1–4)
-- **server.js**: 2,311 → 496 lines (-78%)
-- **routes/** (11 files): config, sessions, sessions-launch, workspaces,
+- **server.js**: 2,311 → 527 lines (-77%)
+- **routes/** (12 files): config, sessions, sessions-launch, workspaces,
   health, version, tunnel, devices, folders, decisions, dev
 - **lib/ helpers**: cliHelpers (183 lines), sessionHelpers (248 lines),
   browserLauncher (135 lines) — extracted from server.js
@@ -69,6 +69,27 @@ new.
 ### New dependencies
 - `express` (runtime)
 - `ws`, `node-pty` (peer)
+
+### Sprint 6: Production Readiness (2026-07-14)
+- **wake_agent MCP tool**: cross-agent wake-up via PTY stdin injection,
+  bypasses 30s notification debounce, supports urgent/normal priority
+- **TTL disabled**: agent heartbeat and SSE session pruning removed;
+  agents persist indefinitely (transport.js + registry.js)
+- **Session Resume fix**: Phase 2 projects/ fallback — detectClaude()
+  now scans `~/.claude/projects/<slug>/<uuid>.jsonl` when per-PID
+  session files are missing (newer Claude builds)
+- **PostgreSQL mirror**: Docker-managed postgres:16-alpine, incremental
+  jsonl sync, resume repair via PG when CLI session ids change
+- **Xterm fixes**: WebGL glyph atlas 30s periodic cleanup (#88),
+  BOOS Muted Dark color palette replacing VSCode Dark+ (#89)
+- **Security audit**: /mcp/* endpoints reviewed — 16 passed, 7 known
+  risks, 0 critical findings (#83)
+- **CI validation**: 3 OS × 2 Node matrix verified, glob fix for
+  tests/unit/ directory (#81)
+- **Cross-platform**: macOS + Linux install scripts CI-verified (#78, #79)
+- **boos_terminal_list MCP tool**: PTY discovery with workspace/cwd/pid (#80)
+- **Agent-Bus tools**: 21 total (wake_agent added), supervisor privileges,
+  workflow DAG engine, decision system
 
 ---
 

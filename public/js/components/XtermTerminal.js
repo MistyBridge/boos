@@ -13,22 +13,23 @@ const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
 const SCROLLBAR_WIDTH_FALLBACK = 14;
 
-// Dark xterm theme - VSCode's Dark+ terminal palette, verbatim (see
-// microsoft/vscode src/.../terminal/common/terminalColorRegistry.ts).
+// Dark xterm theme — BOOS Muted Dark palette. Muted, warm tones that sit
+// comfortably on dark canvas without visual glare. Bright variants lift
+// luminance ~15-20% without increasing saturation.
 const THEME_DARK = {
-  background: '#1e1e1e',
-  foreground: '#cccccc',
+  background: '#1a1b1e',
+  foreground: '#c8c3b8',
   cursor:     '#aeafad',
-  cursorAccent: '#1e1e1e',
-  selectionBackground: '#264f78',
-  black:   '#000000', brightBlack:   '#666666',
-  red:     '#cd3131', brightRed:     '#f14c4c',
-  green:   '#0dbc79', brightGreen:   '#23d18b',
-  yellow:  '#e5e510', brightYellow:  '#f5f543',
-  blue:    '#2472c8', brightBlue:    '#3b8eea',
-  magenta: '#bc3fbc', brightMagenta: '#d670d6',
-  cyan:    '#11a8cd', brightCyan:    '#29b8db',
-  white:   '#e5e5e5', brightWhite:   '#e5e5e5',
+  cursorAccent: '#1a1b1e',
+  selectionBackground: '#3a5068',
+  black:   '#1a1b1e', brightBlack:   '#4a4d52',
+  red:     '#c26b6b', brightRed:     '#d49595',
+  green:   '#6b9b6b', brightGreen:   '#8ab88a',
+  yellow:  '#b8a86b', brightYellow:  '#d4c48a',
+  blue:    '#6b8aad', brightBlue:    '#8aa8c4',
+  magenta: '#9b7b9b', brightMagenta: '#b89ab8',
+  cyan:    '#6b9b9b', brightCyan:    '#8ab8b8',
+  white:   '#b0ada5', brightWhite:   '#d8d5cd',
 };
 
 // Light xterm theme - VSCode's Light+ terminal palette, verbatim (see
@@ -186,6 +187,18 @@ export class XtermTerminal {
     this.refresh();
   }
 
+  // Periodically clear the WebGL glyph texture atlas to prevent glyph
+  // corruption over long-running sessions. Also called from
+  // TerminalInstance on tab-switch with a 300ms delay.
+  startAtlasRefresh(intervalMs = 30000) {
+    if (this._atlasTimer) return;
+    this._atlasTimer = setInterval(() => {
+      if (this.host?.isConnected) {
+        this.forceRedraw();
+      }
+    }, intervalMs);
+  }
+
   write(data, callback) {
     try { this.raw.write(data, callback); } catch { callback?.(); }
   }
@@ -219,6 +232,7 @@ export class XtermTerminal {
   }
 
   dispose() {
+    if (this._atlasTimer) { clearInterval(this._atlasTimer); this._atlasTimer = null; }
     if (this.resizeScrollStateTimer) clearTimeout(this.resizeScrollStateTimer);
     this.resizeScrollState = null;
     this.resizeScrollStateTimer = null;

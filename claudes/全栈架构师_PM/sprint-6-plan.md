@@ -39,17 +39,17 @@
 
 | # | 任务 | 产出 | 状态 |
 |---|------|------|:--:|
-| 78 | macOS install-darwin.sh CI 验证 | CI 绿 | 📋 |
-| 79 | Linux install-linux.sh CI 验证 | CI 绿 | 📋 |
-| 80 | boos_terminal_list MCP tool — schema + handler | lib/mcp/tools.js +35 行 | 📋 |
+| 78 | macOS install-darwin.sh CI 验证 | CI 绿 | ✅ |
+| 79 | Linux install-linux.sh CI 验证 | CI 绿 | ✅ |
+| 80 | boos_terminal_list MCP tool — schema + handler | lib/mcp/tools.js +35 行 | ✅ |
 
 ### P1: 稳定性 (可靠性工程师)
 
 | # | 任务 | 产出 | 状态 |
 |---|------|------|:--:|
-| 81 | CI unit-tests matrix 首次运行验证 | 3 OS × 2 Node = 6 jobs 绿 | 📋 |
-| 82 | agent-bus 负载测试 — 50 tasks burst | 压测报告 | 📋 |
-| 83 | security audit — /mcp/* 端点权限复查 | audit checklist | 📋 |
+| 81 | CI unit-tests matrix 首次运行验证 | 3 OS × 2 Node = 6 jobs 绿 | ✅ |
+| 82 | agent-bus 负载测试 — 50 tasks burst | 压测报告 | 🔄 |
+| 83 | security audit — /mcp/* 端点权限复查 | audit checklist | ✅ |
 
 ### P2: 前端优化 (前端工程师)
 
@@ -58,9 +58,21 @@
 | 84 | 冒烟测试重跑 — 验证 9/9 endpoints | smoke-test-report.md v2 | 📋 |
 | 85 | WorkspacePage + Agent Canvas agent-bus 集成验证 | 兼容性报告 | 📋 |
 | 86 | Dark theme CSS variables 补完 | dark.css 完善 | 📋 |
+| 88 | 🐛 UI 文字破碎修复 — xterm WebGL atlas | XtermTerminal.js + TerminalInstance.js | ✅ |
+| 89 | 🎨 暗色模式终端调色板 — BOOS Muted Dark | XtermTerminal.js THEME_DARK | ✅ |
 
----
+### P0: Session Resume 回退 Bug (PM) 🐛
 
+| # | 任务 | 产出 | 状态 |
+|---|------|------|:--:|
+| 87 | 修复 binding scanner — detectClaude() projects/ fallback | sessionBinding.js Phase 2 | ✅ (diff 未 commit) |
+
+### P0: Agent-Bus 增强 (PM) 🆕
+
+| # | 任务 | 产出 | 状态 |
+|---|------|------|:--:|
+| 90 | TTL 禁用 — agent 默认不下线 | transport.js + registry.js | ✅ (未部署) |
+| 91 | wake_agent MCP 工具 — 主动唤醒休眠 agent | schemas + handlers + notifications | ✅ (未部署) |
 ## 交付物
 
 ```

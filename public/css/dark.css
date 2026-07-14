@@ -137,29 +137,29 @@
 /* Dark values for the --term-* palette (terminals.css holds the light
    defaults). These restore the original near-black terminal surround,
    tab strip, empty/displaced states, and mobile key bar. Keep in lockstep
-   with TerminalView.js's THEME_DARK. */
+   with XtermTerminal.js's THEME_DARK (BOOS Muted Dark). */
 [data-theme="dark"] {
-  /* VSCode Dark+ neutral panel grays around the #1e1e1e terminal canvas. */
-  --term-surface:       #1e1e1e;   /* matches THEME_DARK.background */
-  --term-on:            #cccccc;
-  --term-on-dim:        rgba(204, 204, 204, 0.72);
-  --term-on-faint:      rgba(204, 204, 204, 0.45);
-  --term-heading:       #ffffff;
-  --term-prompt:        #f14c4c;   /* VSCode ansiBrightRed */
-  --term-cta-bg:        #cccccc;
-  --term-cta-fg:        #1e1e1e;
-  --term-cta-bg-hover:  #e5e5e5;
-  --term-tabstrip:      #252526;
-  --term-tab:           #2d2d2d;
-  --term-tab-hover:     #333333;
-  --term-tab-text:      rgba(204, 204, 204, 0.65);
-  --term-keybar-bg:     #252526;
-  --term-key-fg:        #cccccc;
+  /* BOOS Muted Dark — muted warm palette matching BOOS design language. */
+  --term-surface:       #1a1b1e;   /* matches THEME_DARK.background */
+  --term-on:            #c8c3b8;   /* warm foreground */
+  --term-on-dim:        rgba(200, 195, 184, 0.72);
+  --term-on-faint:      rgba(200, 195, 184, 0.45);
+  --term-heading:       #d8d5cd;
+  --term-prompt:        #c26b6b;   /* BOOS muted red, not VSCode #f14c4c */
+  --term-cta-bg:        #c8c3b8;
+  --term-cta-fg:        #1a1b1e;
+  --term-cta-bg-hover:  #d8d5cd;
+  --term-tabstrip:      #1e1f22;
+  --term-tab:           #25262a;
+  --term-tab-hover:     #2d2e32;
+  --term-tab-text:      rgba(200, 195, 184, 0.65);
+  --term-keybar-bg:     #1e1f22;
+  --term-key-fg:        #c8c3b8;
   --term-key-bg:        rgba(255, 255, 255, 0.06);
   --term-key-border:    rgba(255, 255, 255, 0.14);
   --term-key-active-bg: rgba(255, 255, 255, 0.20);
   --term-key-active-border: rgba(255, 255, 255, 0.32);
-  --term-key-hint:      rgba(204, 204, 204, 0.5);
-  --term-pop-bg:        #252526;
+  --term-key-hint:      rgba(200, 195, 184, 0.5);
+  --term-pop-bg:        #1e1f22;
   --term-pop-border:    rgba(255, 255, 255, 0.16);
 }
