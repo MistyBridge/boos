@@ -70,6 +70,10 @@ async function gracefulShutdown(reason) {
       }
     }
   } catch {}
+  // 3. Stop PostgreSQL container (Sprint 7).
+  try {
+    await require('./lib/postgres').stopContainer();
+  } catch {}
   try {
     tunnel.stop();
   } catch {}
@@ -360,6 +364,17 @@ function listenWithFallback(preferred) {
   // Binding scanner — extracted to lib/sessionBinding.js via createScanner().
   // Re-runs because fork / clear / resume rotate the upstream session id.
   bindingScanner.startPeriodicScan();
+
+  // Sprint 7: PostgreSQL conversation persistence — ensure Docker container
+  // is running and healthy, create tables. Degrades gracefully if Docker is
+  // not available (server boots normally, just without PG sync).
+  if (process.env.BOOS_NO_POSTGRES !== '1') {
+    try {
+      await require('./lib/postgres').ensureContainer();
+    } catch (e) {
+      console.warn('[boos] postgres: ensureContainer failed —', e.message);
+    }
+  }
 
   // ── Agent-Bus notifications ────────────────────────────────────────
   // In-process push bridge: listens to queue.inboxEvents and writes

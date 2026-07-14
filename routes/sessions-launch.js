@@ -149,6 +149,22 @@ function register(app, deps) {
           console.log('[boos] smart resume: inherited cliSessionId from', bestExisting.id.slice(-8), '→ new session', record.id.slice(-8));
         }
 
+        // Sprint 7: PostgreSQL resume fix — verify cliSessionId against
+        // the latest known session for this cwd in PG (the mirror store).
+        try {
+          const pg = require('../lib/postgres');
+          const pool = pg.getPool();
+          if (pool && inheritedCliSessionId) {
+            const { getLatestForCwd } = require('../lib/conversationSync');
+            const latest = await getLatestForCwd(pool, launchCwd);
+            if (latest && latest.cliSessionId !== inheritedCliSessionId) {
+              await persistedSessions.setCliSessionId(record.id, latest.cliSessionId);
+              inheritedCliSessionId = latest.cliSessionId;
+              console.log('[boos] pg-resume: corrected cliSessionId from PG mirror →', latest.cliSessionId.slice(0, 8));
+            }
+          }
+        } catch {}
+
         try {
           launched = await spawnSessionRecord({
             record, cli, cfg, body: req.body,
@@ -190,6 +206,23 @@ function register(app, deps) {
         console.log('[boos] smart resume: patched cliSessionId from', best.id.slice(-8), '→', record.id.slice(-8));
       }
     }
+
+    // Sprint 7: PostgreSQL resume fix — verify cliSessionId is the latest
+    // known for this cwd. If the binding scanner hasn't caught a rotation yet,
+    // PG (which mirrors every JSONL write) has the freshest session id.
+    try {
+      const pg = require('../lib/postgres');
+      const pool = pg.getPool();
+      if (pool) {
+        const { getLatestForCwd } = require('../lib/conversationSync');
+        const latest = await getLatestForCwd(pool, record.cwd);
+        if (latest && latest.cliSessionId !== record.cliSessionId) {
+          await persistedSessions.setCliSessionId(record.id, latest.cliSessionId);
+          record = await persistedSessions.get(record.id);
+          console.log('[boos] pg-resume: corrected stale cliSessionId →', latest.cliSessionId.slice(0, 8));
+        }
+      }
+    } catch {}
 
     const cfg = await loadConfig();
     const cli = findCliById(cfg, record.cliId);
