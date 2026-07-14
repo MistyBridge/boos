@@ -290,10 +290,10 @@ export class XtermTerminal {
   _resizeRaw(cols, rows) {
     const scrollState = this._scrollStateForResize();
     try { this.raw.resize(cols, rows); } catch {}
-    this._restoreScrollStateIfNeeded(scrollState);
+    // Single rAF restore — the old 0ms/150ms/350ms chain could fire
+    // scrollToLine mid-render while AI output was streaming, causing
+    // visible tear lines. One attempt in the next frame is enough.
     requestAnimationFrame(() => this._restoreScrollStateIfNeeded(scrollState));
-    setTimeout(() => this._restoreScrollStateIfNeeded(scrollState), 150);
-    setTimeout(() => this._restoreScrollStateIfNeeded(scrollState), 350);
   }
 
   _scrollStateForResize() {

@@ -138,10 +138,14 @@ export class TerminalInstance {
     if (nextVisible) {
       this.resizeDebouncer.flush();
       this.scheduleLayout({ immediate: true, retries: true, forceRedraw: false });
-      // Tab switch → delay forceRedraw 300ms to let layout settle, then
-      // clear the WebGL glyph atlas for crisp text.
+      // Tab switch → defer forceRedraw to a double-rAF so we hit a
+      // moment when WebGL rendering pipeline is idle (between frames),
+      // avoiding the tear that setTimeout(300) causes when AI output
+      // is streaming during the delay window.
       if (didChange) {
-        setTimeout(() => this.xterm.forceRedraw(), 300);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => this.xterm.forceRedraw());
+        });
       }
       if (this.pendingThemeRefresh) {
         this.pendingThemeRefresh = false;
@@ -458,8 +462,13 @@ export class TerminalInstance {
     this._beginReplay();
     this.xterm.write(data, () => {
       this._endReplay();
+      // Re-layout after replay to accommodate any dimension changes, but
+      // skip forceRedraw — the 30s atlasRefresh (startAtlasRefresh)
+      // picks up glyph corruption on its own cadence; a mid-stream
+      // forceRedraw here would clear the WebGL texture atlas while
+      // more output frames are arriving, causing visible tearing.
       if (this.isVisible) {
-        this.scheduleLayout({ immediate: true, retries: true, forceRedraw: true });
+        this.scheduleLayout({ immediate: true, forceRedraw: false });
       }
     });
   }
