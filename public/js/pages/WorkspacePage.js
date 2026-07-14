@@ -126,7 +126,12 @@ export function WorkspacePage() {
   }));
 
   const selectedAgent = agentList.find((a) => a.id === sid) || null;
-  const wsName = group ? group.name : (activeKey || '工作区');
+  // Derive a meaningful workspace name even in fallback mode —
+  // '工作区' is a generic catch-all, but when we show all sessions we
+  // can label it with the count so the user knows what they're looking at.
+  const wsName = group ? group.name
+    : activeKey
+      || (agentSessions.length > 0 ? `全部会话 (${agentSessions.length})` : '工作区');
 
   // ── load layout from localStorage ────────────────────────────────
 
