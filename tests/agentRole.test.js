@@ -50,7 +50,7 @@ describe('Agent Role (handlers.js)', () => {
     store = require('../lib/agentBus/store');
 
     // Register a supervisor.
-    const sup = registry.registerAgent({
+    const sup = await registry.registerAgent({
       name: 'SupervisorBot', intro: 'I oversee', workspace: WORKSPACE,
       role: 'supervisor',
     });
@@ -58,15 +58,12 @@ describe('Agent Role (handlers.js)', () => {
     supervisorUid = sup.uid;
 
     // Register a worker.
-    const wrk = registry.registerAgent({
+    const wrk = await registry.registerAgent({
       name: 'WorkerBot', intro: 'I execute', workspace: WORKSPACE,
       role: 'worker',
     });
     assert.equal(wrk.ok, true);
     workerUid = wrk.uid;
-
-    // Let async insertAgent() complete before tests run.
-    await new Promise((r) => setTimeout(r, 50));
   });
 
   after(() => {
@@ -187,14 +184,11 @@ describe('Agent Role (handlers.js)', () => {
 
   test('agent without role field defaults to worker (backward compat)', async () => {
     // Register an agent without specifying role.
-    const r = registry.registerAgent({
+    const r = await registry.registerAgent({
       name: 'LegacyAgent', intro: '', workspace: WORKSPACE,
       // No 'role' field.
     });
     assert.equal(r.ok, true);
-
-    // Let async insertAgent() complete.
-    await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Verify it gets worker role.
     const agent = store.getAgent(r.uid);

@@ -275,6 +275,7 @@ require('./routes/version').register(app, {
 
 // ---- decisions ----
 require('./routes/decisions').register(app, { asyncH });
+require('./routes/hr').register(app, { hrAgent: require('./lib/hrAgent') });
 
 function listenWithFallback(preferred) {
   return new Promise((resolve, reject) => {
@@ -367,7 +368,9 @@ function listenWithFallback(preferred) {
   // is now embedded. Disable with BOOS_NO_AGENT_BUS_WATCH=1.
   if (process.env.BOOS_NO_AGENT_BUS_WATCH !== '1') {
     try {
-      require('./lib/agentBus/notifications').start();
+      require('./lib/agentBus/notifications').start('boos').catch(e => {
+        console.warn('[boos] collaboration loop init failed:', e.message);
+      });
     } catch (e) {
       console.warn('[boos] agent-bus notifications failed to start:', e.message);
     }
