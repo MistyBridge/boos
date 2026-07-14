@@ -185,7 +185,11 @@ export function AgentCanvas({ agents, positions, activeAgentId, onSelectAgent, o
           />`;
       })}
       ${agents.length === 0 ? html`
-        <div class="workspace-canvas-empty">双击 agent 节点开始对话</div>
+        <div class="workspace-canvas-empty">
+          暂无 agent 节点 — 在侧边栏文件夹中点击
+          <span class="workspace-canvas-empty-hint">⊞</span>
+          可在此画布中打开
+        </div>
       ` : null}
     </div>`;
 }
