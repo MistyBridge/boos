@@ -101,6 +101,7 @@ export function AgentCanvas({ agents, positions, activeAgentId, onSelectAgent, o
       nodeHeight: rect.height || 56,
     };
     node.setPointerCapture(e.pointerId);
+    node.classList.add('is-dragging');
   }, []);
 
   const _onPointerMove = useCallback((e) => {
