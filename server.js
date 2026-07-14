@@ -484,14 +484,32 @@ function listenWithFallback(preferred) {
   // BOOS_KEEP_ALIVE=1 disables all automatic shutdown.
 
   if (process.env.BOOS_KEEP_ALIVE !== '1') {
+    // Heartbeat watchdog — prevents zombie processes when the frontend
+    // disconnects. Runs every 30s regardless of whether a heartbeat was
+    // ever seen. Two shutdown paths:
+    //
+    //   1. Heartbeat seen, then lost → 90s grace period (users refresh page, etc.)
+    //   2. No heartbeat ever seen within 120s of boot → the browser opened but
+    //      the frontend failed to connect (wrong version, network issue). Kill
+    //      the server rather than running forever as a zombie.
     setInterval(() => {
-      if (!lifecycleState.heartbeatSeen) return;
-      if (Date.now() - lifecycleState.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
-        // Don't kill if there are still active PTY sessions — the user might
-        // be working without the frontend open. idleWatcher handles that case.
-        const hasLiveSession = webTerminal.list().some((t) => !t.exitedAt);
-        if (hasLiveSession) return;
-        gracefulShutdown(`no heartbeat for ${HEARTBEAT_TIMEOUT_MS / 1000}s`);
+      const uptime = process.uptime() * 1000;
+      const hasLiveSession = webTerminal.list().some((t) => !t.exitedAt);
+
+      // Path 1: frontend was seen once but stopped sending heartbeats.
+      if (lifecycleState.heartbeatSeen) {
+        if (Date.now() - lifecycleState.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+          if (!hasLiveSession) {
+            gracefulShutdown(`no heartbeat for ${HEARTBEAT_TIMEOUT_MS / 1000}s`);
+          }
+        }
+        return;
+      }
+
+      // Path 2: no frontend ever connected. If there are no PTY sessions
+      // either, the server is a zombie — shut it down after 120s.
+      if (!hasLiveSession && uptime > 120_000) {
+        gracefulShutdown('no frontend connected within 120s of boot');
       }
     }, 30_000);
     console.log('[boos] heartbeat watchdog active (respects live sessions)');
