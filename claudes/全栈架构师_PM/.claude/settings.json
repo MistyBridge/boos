@@ -4,44 +4,5 @@
     "paths": [
       "D:/AI IDE/CC_BOOS/claudes/全栈架构师_PM/.claude/skills"
     ]
-  },
-  "mcpServers": {
-    "filesystem": {
-      "command": "node",
-      "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/filesystem/dist/index.js",
-        "D:/AI IDE/CC_BOOS"
-      ],
-      "description": "Filesystem operations for BOOS project"
-    },
-    "sequential-thinking": {
-      "command": "node",
-      "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"
-      ],
-      "description": "Structured analysis for architecture decisions"
-    },
-    "memory": {
-      "command": "node",
-      "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/memory/dist/index.js"
-      ],
-      "description": "Knowledge graph - store architecture decisions"
-    },
-    "github": {
-      "command": "node",
-      "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/node_modules/@modelcontextprotocol/server-github/dist/index.js"
-      ],
-      "env": {
-        "GITHUB_TOKEN": "your_github_token_here"
-      },
-      "description": "GitHub - Issues, PRs, code search"
-    },
-    "agent-bus": {
-      "type": "sse",
-      "url": "http://127.0.0.1:7777/mcp/sse",
-      "description": "Agent间任务通信 — 注册、发现、派发、追踪、广播"
-    }
   }
 }

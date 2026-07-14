@@ -4,41 +4,5 @@
     "paths": [
       "D:/AI IDE/CC_BOOS/claudes/前端工程师/.claude/skills"
     ]
-  },
-  "mcpServers": {
-    "filesystem": {
-      "command": "node",
-      "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/filesystem/dist/index.js",
-        "D:/AI IDE/CC_BOOS"
-      ],
-      "description": "Filesystem operations for BOOS frontend"
-    },
-    "playwright": {
-      "command": "node",
-      "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/playwright/cli.js"
-      ],
-      "description": "Browser automation - UI verification"
-    },
-    "fetch": {
-      "command": "node",
-      "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/fetch/build/index.js"
-      ],
-      "description": "Web content fetching - docs and references"
-    },
-    "sequential-thinking": {
-      "command": "node",
-      "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"
-      ],
-      "description": "Structured analysis for complex UI logic"
-    },
-    "agent-bus": {
-      "type": "sse",
-      "url": "http://127.0.0.1:7777/mcp/sse",
-      "description": "Agent间任务通信 — 接收TL任务、回复结果"
-    }
   }
 }

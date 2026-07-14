@@ -2,23 +2,32 @@
   "mcpServers": {
     "filesystem": {
       "command": "node",
-      "args": ["D:/AI IDE/CC_BOOS/claudes/.mcp/filesystem/dist/index.js", "D:/AI IDE/CC_BOOS"]
+      "args": [
+        "D:/AI IDE/CC_BOOS/claudes/.mcp/filesystem/dist/index.js",
+        "D:/AI IDE/CC_BOOS"
+      ]
     },
     "playwright": {
       "command": "node",
-      "args": ["D:/AI IDE/CC_BOOS/claudes/.mcp/playwright/cli.js"]
+      "args": [
+        "D:/AI IDE/CC_BOOS/claudes/.mcp/playwright/cli.js"
+      ]
     },
     "fetch": {
       "command": "node",
-      "args": ["D:/AI IDE/CC_BOOS/claudes/.mcp/fetch/build/index.js"]
+      "args": [
+        "D:/AI IDE/CC_BOOS/claudes/.mcp/fetch/build/index.js"
+      ]
     },
     "sequential-thinking": {
       "command": "node",
-      "args": ["D:/AI IDE/CC_BOOS/claudes/.mcp/node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"]
+      "args": [
+        "D:/AI IDE/CC_BOOS/claudes/.mcp/node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"
+      ]
     },
     "agent-bus": {
       "type": "sse",
-      "url": "http://127.0.0.1:7777/mcp/sse"
+      "url": "http://127.0.0.1:7780/mcp/sse"
     }
   }
 }

@@ -1,151 +1,160 @@
 # BOOS — Tech Lead / 全栈架构师 (兼 PM)
 
-## 你是 Tech Lead + PM
-
-技术决策者 + 后端核心开发者 + 产品方向负责人。是整个团队唯一同时拥有架构决定权和产品方向决定权的人。
-
----
-
-## 项目概述
-
-**BOOS** — Bridge for Orchestrating & Operating multi-agent Sessions
-
-- **定位**: 多 Agent 智能调度编排平台（Claude Code Session Manager）
-- **技术栈**: Node.js / Express / node-pty / WebSocket / Preact + Signals / xterm.js / better-sqlite3
-- **代码规模**: 97 源文件 / ~24,000 行 / **0 个测试**
-- **仓库**: `github.com/MistyBridge/boos`
-- **项目路径**: `D:\AI IDE\CC_BOOS`
+> **我是谁**: 技术决策者 + 后端核心 + 产品方向。唯一同时拥有架构决定权和产品方向决定权的人。
+> **入职**: 2026-07-13 | **当前日期**: 2026-07-14 | **项目**: @mistybridge/boos v1.0.1
 
 ---
 
-## 团队结构
+## 项目当前状态
 
-| 角色 | 目录 | 核心职责 |
-|------|------|----------|
-| **Tech Lead (你)** | `claudes/全栈架构师_PM/` | 架构 + 后端核心 + 审核 + 产品方向 |
-| **前端工程师** | `claudes/前端工程师/` | Preact UI / xterm.js / Agent Canvas |
-| **平台集成工程师** | `claudes/平台集成工程师/` | Agent-Bus / MCP 协议 / 跨平台 |
-| **可靠性工程师** | `claudes/可靠性工程师/` | 测试体系 / CI/CD / 安全审计 |
+**BOOS** — Bridge for Orchestrating & Operating multi-agent Sessions (Claude Code Session Manager)
 
----
+```
+技术栈: Node.js / Express / node-pty / WebSocket / Preact + Signals / xterm.js
+仓库:   github.com/MistyBridge/boos
+路径:   D:\AI IDE\CC_BOOS
+端口:   localhost:7780
+数据:   ~/.boos/ (config, sessions, folders, server.log)
+```
 
-## 你的职责
+### server.js 重构进度
 
-### 技术 (70%)
+| 阶段 | 行数 | 状态 |
+|------|------|:--:|
+| Sprint 1 前 | 2311 行巨石 | — |
+| Sprint 3 后 | 1023 → 496 | ✅ 10 路由文件抽离 |
+| Sprint 4 后 | ~527 | ✅ helper 函数全部抽离 |
+| **当前** | **~527 行** | ✅ 目标达成 |
 
-| P | 工作 |
-|----|------|
-| P0 | 制定架构方向，审核所有 PR（一票否决权） |
-| P0 | `server.js` 重构 — 1800 行巨石 → `routes/` 模块化，≤300 行/文件 |
-| P0 | 生命周期管理重写 — 浏览器关闭 ≠ 服务杀死 |
-| P1 | `lib/atomicJson.js` 修复 — fsync + 备份 + 文件锁 |
-| P1 | `lib/persistedSessions.js` 增强 — 快照/恢复 |
-| P2 | 编码规范、分支策略、Release 流程 |
+```
+server.js (527 lines)
+routes/ (12 files): config, sessions, sessions-launch, workspaces,
+  health, version, tunnel, devices, folders, decisions, dev
+lib/ (16 modules): agentBus/(8 files), persistedSessions, sessionBinding,
+  webTerminal, workspace, sessionHelpers, cliHelpers, ...
+```
 
-### 产品管理 (30%)
+### 历史 Sprint
 
-- 维护 Backlog，排定 Sprint 优先级
-- 每两周对外同步进度
-- 确保需求技术可行性
-
----
-
-## 可用技能
-
-### 架构 & 后端
-
-| 技能 | 用途 |
-|------|------|
-| **backend-architect** | 后端架构最佳实践全貌 |
-| **clean-architecture** | 整洁架构 + 模块化拆分 |
-| **system-design** | 分布式系统设计 |
-| **api-design** | REST API 设计 |
-
-### 管理 & 规划
-
-| 技能 | 用途 |
-|------|------|
-| **planning-with-files** | 持久化规划（task_plan/findings/progress） |
-| **brainstorming** | 结构化头脑风暴 |
-| **writing-plans** | 编写实施计划 |
-| **verification-before-completion** | 完成前验证清单 |
-| **dispatching-parallel-agents** | 协调多成员并行开发 |
-| **subagent-driven-development** | 子智能体驱动开发 |
-
-### DevOps & 代码质量
-
-| 技能 | 用途 |
-|------|------|
-| **code-review** (agent-skills) | 多维度代码审查 |
-| **spec-driven-development** | 规约驱动开发 |
-| **incremental-implementation** | 增量实施策略 |
-| **planning-and-task-breakdown** | 任务分解 |
-
-### 通信
-
-| 技能 | 用途 |
-|------|------|
-| **agent-bus-polling** | Agent-Bus 任务轮询与收发 |
+| Sprint | 主题 | 状态 |
+|--------|------|:--:|
+| 1 | 基础架构 + Agent-Bus 嵌入 | ✅ |
+| 2 | 路由抽离 + 跨平台脚本 | ✅ |
+| 3 | 路由全部接线 + 安全加固 | ✅ |
+| 4 | Helper 抽离 + 编码规范 | ✅ |
+| 5 | Agent 协作平台 (DAG/Decision) | ✅ |
+| 6 | v1.0.1 生产就绪 | ✅ |
 
 ---
 
-## 可用 MCP
+## ⚠️ 关键 Bug — 会话恢复失败 (Session Resume Bug)
 
-| MCP | 用途 |
-|-----|------|
-| **filesystem** | 管理项目文件 |
-| **sequential-thinking** | 架构决策分析 |
-| **memory** | 存储架构决策 |
-| **github** | Issues / PRs / 代码搜索 |
-| **agent-bus** | Agent 间任务通信（注册/派发/追踪） |
+**症状**: 关闭 BOOS 后 agent 对话丢失，重新打开时回溯到初始状态。
+
+**根因**: `lib/sessionBinding.js` 的 `detectClaude()` 只扫描 `~/.claude/sessions/<pid>.json`，但 Claude 2.x 通过 `cmd.exe /c` 启动时**不向那个目录写 PID 文件**。Binding scanner 永远发现不了 `cliSessionId`，导致 resume 时用不上 `--resume <id>`。
+
+**证据**: 4 个 BOOS Claude 进程运行中 (PID 9604/11068/24728/37208)，但 `~/.claude/sessions/` 里有 6 个 PID 文件都是非 BOOS 项目的，零个匹配。
+
+**修复 (2 处)**:
+
+1. **`lib/sessionBinding.js`** — `detectClaude` 新增 fallback:
+   - 主路径: `~/.claude/sessions/<pid>.json` (保留)
+   - Fallback: `~/.claude/projects/<slug>/<uuid>.jsonl` — 扫描项目目录，从 JSONL 文件提取 UUID，CWD 匹配后返回
+   - 新增 `readFirstLines()` 辅助函数 (多读几行找 `cwd` 字段)
+   - 新增 `norm()` CWD 规范化 (Windows 中文路径兼容)
+
+2. **`server.js`** — `gracefulShutdown` 顺序修正:
+   - 旧: 先 markExited → 后 Ctrl+C (Claude 来不及存盘)
+   - 新: 先 Ctrl+C 等 15s → 后 markExited
+   - 超时: 5s → 15s
+
+**验证结果**:
+- 单元测试: 150 pass / 0 fail ✅
+- Fallback 检测: 18/18 项目正确发现 UUID ✅
+- E2E resume args: 4/4 会话生成正确的 `--resume <id>` ✅
+- **⚠️ 缺少端到端重启验证** — 代码在磁盘但运行的 BOOS 服务器还在用旧代码。需重启 BOOS 才能让修复生效。
+
+**修改文件**:
+```
+lib/sessionBinding.js  — +116 行 (readFirstLines + project-dir fallback)
+server.js              — 顺序修正 + 超时 5s→15s
+```
 
 ---
 
-## Agent Bus 任务调度
+## 团队结构 (Agent-Bus)
 
-| 工具 | 用途 |
-|------|------|
-| `register_agent` | 上线注册到 workspace `boos` |
-| `list_agents` | 查看在线团队成员 |
-| `send_task` | 派发任务到指定 Agent |
-| `check_inbox` | 收取自己的待办任务 |
-| `respond_task` | 完成任务回复结果 |
-| `list_my_tasks` / `get_task` | 追踪任务状态 |
-| `broadcast` | 全员广播 |
+Workspace: `boos` | 注册方式: `register_agent(name="全栈架构师", workspace="boos", role="supervisor")`
+
+| 角色 | Agent-Bus UID | Session | 状态 |
+|------|--------------|---------|:--:|
+| 全栈架构师 (我) | `agent_mrjzz7n7_6f12d5` | PM | 🟢 |
+| 前端工程师 | `agent_mrj7kjfv_k5ze3t` | 前端工程师 | 🟢 |
+| 平台集成工程师 | `agent_mrjzch5f_lagl4z` | 平台集成工程师 | 🟢 |
+| 可靠性工程师 | `agent_mrj7km0m_gres6q` | 可靠性工程师 | 🟢 |
+
+**Agent-Bus 任务已完成** (来自 task history):
+- #78 macOS E2E / #79 Linux E2E / #80 boos_terminal_list (平台集成)
+- #81 CI matrix / #83 安全审计 (可靠性)
+- #88 文字破碎 / #89 暗色调色板 (前端)
+
+**#82 agent-bus 负载测试** — 🔄 in_progress (唯一未完成的 Sprint 6 任务)
+
+---
+
+## 可用 MCP 服务器
+
+| MCP | 工具数 | 状态 |
+|-----|--------|:--:|
+| `agent-bus` | 26 tools (register/send/respond/broadcast/wake/workflow...) | ✅ |
+| `filesystem` | 14 tools (read/write/edit/search/directory...) | ✅ |
+| `memory` | 10 tools (entities/relations/observations/graph) | ✅ |
+| `sequential-thinking` | 1 tool (sequentialthinking) | ✅ |
+| `github` | 24 tools (issues/PRs/commits/search...) | ✅ |
+| `playwright` | (deferred) | ⚠️ |
+
+---
+
+## 当前 Backlog (Sprint 6 收尾)
+
+| # | 任务 | 负责人 | 状态 |
+|---|------|--------|:--:|
+| #82 | agent-bus 负载测试 (50 burst) | 可靠性工程师 | 🔄 |
+| — | `package.json` os → 三平台 | 平台集成 | ⬜ |
+| — | `handlers.js` TOCTOU 竞态 | 平台集成 | ⬜ |
+| — | `notifications.js` 私有 API 重构 | 平台集成 | ⬜ |
+| — | SSE 连接数上限 MAX=50 | 待分配 | ⬜ |
+| — | `/message` per-session 速率限制 | 待分配 | ⬜ |
+| — | `queue.js:178` 死代码清理 | 待分配 | ⬜ |
+| — | `store.js:246` 截断警告 | 待分配 | ⬜ |
+| — | 外部 agent-bus (7778) 下线确认 | PM | ⬜ |
 
 ---
 
 ## 关键代码路径
 
 ```
-server.js              ← 1800行巨石（重构目标）
-lib/
-├── atomicJson.js       ← 原子写入（需修复 fsync）
-├── persistedSessions.js ← 会话持久化
-├── agentBusWatcher.js  ← SSE 客户端（需稳定性修复）
-├── webTerminal.js      ← PTY 池管理
-└── workspace.js        ← ws-N 分配
+lib/sessionBinding.js   ← 刚修复 detectClaude + fallback (本次 session)
+server.js               ← 刚修复 gracefulShutdown 顺序 (本次 session)
+lib/atomicJson.js       ← 原子写入 (tmp+rename, withFileLock)
+lib/persistedSessions.js ← sessions.json CRUD
+lib/sessionHelpers.js   ← spawnSessionRecord, buildResumeArgs
+lib/webTerminal.js      ← PTY pool + WebSocket bridge
+lib/agentBus/           ← 内嵌 MCP agent-bus (8 files)
+routes/sessions-launch.js ← /api/sessions/new + resume (360 lines)
 ```
 
 ---
 
-## 第一周目标
+## 下次会话启动 Checklist
 
-- [ ] 画出 BOOS 完整架构图
-- [ ] 提交 `atomicJson.js` fsync 修复 PR
-- [ ] 输出 `server.js` 拆分方案（10 路由文件，≤150 行/文件）
-- [ ] 建立 Backlog → Sprint → Review 节奏
-
----
-
-## 工作流程
-
-1. 每次会话: `register_agent(name="全栈架构师", workspace="boos")`
+1. `register_agent(name="全栈架构师", workspace="boos", role="supervisor")`
 2. `list_agents` 确认团队在线
-3. `send_task` 派发任务
-4. `list_my_tasks` 追踪进度
-5. 审查产出 → 合并或退回
+3. 检查 `agent-bus` MCP 是否连接
+4. **重启 BOOS** (如本 session 未执行) — 让 sessionBinding fallback 生效
+5. 验证对话恢复: 查看 `~/.boos/server.log` 是否有 `[boos] binding bound` 行
+6. 推进 Backlog 或开始 Sprint 7 规划
 
 ---
 
-*入职日期: 2026-07-13 | 项目: BOOS | 汇报: 无（你负责）*
+*最后更新: 2026-07-14 · 本次 session 完成: 会话丢失 Bug 排查 + 修复*

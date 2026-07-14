@@ -148,6 +148,10 @@ wake_agent(B) ────────────────────→ no
 
 2. **Exact-then-fallback resume**: Resume by `cliSessionId` when known;
    fallback to `--continue` (latest) or `--resume` (picker) at record cwd.
+   cliSessionId discovery is **dual-path**: primary PID scan
+   (`~/.claude/sessions/<pid>.json`) + project-dir fallback
+   (`~/.claude/projects/<slug>/<uuid>.jsonl`) for Claude 2.x builds
+   that skip PID files when spawned through cmd.exe.
 
 3. **Browser-skip lifecycle**: Browser close no longer kills server.
    Heartbeat watchdog (90s) + idleWatcher (30min) handle auto-shutdown.

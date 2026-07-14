@@ -75,9 +75,11 @@ new.
   bypasses 30s notification debounce, supports urgent/normal priority
 - **TTL disabled**: agent heartbeat and SSE session pruning removed;
   agents persist indefinitely (transport.js + registry.js)
-- **Session Resume fix**: Phase 2 projects/ fallback — detectClaude()
-  now scans `~/.claude/projects/<slug>/<uuid>.jsonl` when per-PID
-  session files are missing (newer Claude builds)
+- **Session Resume fix**: detectClaude() dual-path — primary PID scan
+  (`~/.claude/sessions/<pid>.json`) + project-dir fallback
+  (`~/.claude/projects/<slug>/<uuid>.jsonl`) when PID files are missing
+  (Claude 2.x spawned via cmd.exe). gracefulShutdown reordered: Ctrl+C
+  first (15s timeout) → markExited after, so CLI state flushes to disk.
 - **PostgreSQL mirror**: Docker-managed postgres:16-alpine, incremental
   jsonl sync, resume repair via PG when CLI session ids change
 - **Xterm fixes**: WebGL glyph atlas 30s periodic cleanup (#88),

@@ -51,8 +51,17 @@ async function gracefulShutdown(reason) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[boos] shutting down · ${reason}`);
-  // Mark all running sessions as exited (best-effort) so the next launch
-  // doesn't show stale "running" rows.
+  // 1. Send Ctrl+C to every PTY and wait for natural exit (up to 15s) so CLI
+  //    processes can flush session state to disk. Order matters: kill FIRST,
+  //    then mark exited — reversing this causes the CLI's onExit callback to
+  //    run after we already wrote status:'exited', which is harmless, but the
+  //    real goal is giving the CLI time to save state before this function
+  //    calls process.exit.
+  try {
+    await webTerminal.gracefulKillAll(15000);
+  } catch {}
+  // 2. Mark all running sessions as exited so the next launch doesn't show
+  //    stale "running" rows.
   try {
     const all = await persistedSessions.loadAll();
     for (const s of all) {
@@ -60,9 +69,6 @@ async function gracefulShutdown(reason) {
         await persistedSessions.markExited(s.id, null).catch(() => {});
       }
     }
-  } catch {}
-  try {
-    await webTerminal.gracefulKillAll(5000);
   } catch {}
   try {
     tunnel.stop();
