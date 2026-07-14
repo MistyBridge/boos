@@ -13,3 +13,4 @@ public/favicon-root.svg
 # OS junk
 Thumbs.db
 .DS_Store
+claudes/.mcp/playwright/
