@@ -115,7 +115,7 @@ function register(app, deps) {
           } catch {}
           // Compute sandbox-aware filesystem config.
           const sandbox = require('../lib/sandbox');
-          const fsConfig = await sandbox.getFilesystemMcpConfig({ folderId: body.folderId });
+          const fsConfig = await sandbox.getFilesystemMcpConfig({ folderId: req.body && req.body.folderId });
           const merged = {
             ...existing,
             mcpServers: {
@@ -192,6 +192,26 @@ function register(app, deps) {
                 pty_pid: launched?.pid || null, name: matched.name,
                 workspace: matched.workspace, role: matched.role || 'worker',
               });
+
+              // P2 fix: update filesystem MCP config with agentUid for PM/supervisor check.
+              // If agent is supervisor, grant full project access; otherwise, sandbox to folder rootPath.
+              if (matched.role === 'supervisor' || (matched.pm_of && matched.pm_of.length > 0)) {
+                const sandbox = require('../lib/sandbox');
+                const fsConfig = await sandbox.getFilesystemMcpConfig({
+                  folderId: record.folderId,
+                  agentUid: matched.uid,
+                });
+                const mcpPath = path.join(launchCwd, '.mcp.json');
+                try {
+                  const raw = await require('node:fs/promises').readFile(mcpPath, 'utf-8');
+                  const mcp = JSON.parse(raw);
+                  mcp.mcpServers = mcp.mcpServers || {};
+                  mcp.mcpServers.filesystem = fsConfig;
+                  await require('node:fs/promises').writeFile(mcpPath, JSON.stringify(mcp, null, 2), 'utf-8');
+                } catch (e) {
+                  console.warn('[boos] failed to update filesystem MCP config for PM:', e.message);
+                }
+              }
             }
           } catch (e) { /* best-effort */ }
 

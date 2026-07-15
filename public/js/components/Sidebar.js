@@ -449,7 +449,7 @@ function ImportById() {
     </form>`;
 }
 
-function SessionTree() {
+function SessionTree({ onFolderSettings }) {
   const grouped = sessionsByFolder.value;
   const orderedFolders = folders.value;
   const dnd = useDragSort(
@@ -488,7 +488,7 @@ function SessionTree() {
                         sessionList=${filtered}
                         dndHandle=${dnd.handleProps(f.id)}
                         dndRow=${dnd.rowProps(f.id)}
-                        onFolderSettings=${(folder) => setSettingsFolder(folder)} />`;
+                        onFolderSettings=${(folder) => onFolderSettings?.(folder)} />`;
       })}
       <${DeletedSessionsGroup} />
       <${ImportById} />
@@ -564,7 +564,7 @@ export function Sidebar() {
         <${NavItem} tab="configure" icon=${html`<${IconConfigure} />`} label=${T.sidebar.settings} dirty=${configDirty.value} />
       </nav>
 
-      ${!collapsed ? html`<${SessionTree} />` : null}
+      ${!collapsed ? html`<${SessionTree} onFolderSettings=${setSettingsFolder} />` : null}
 
       <div class="sidebar-foot">
         ${!forced ? html`
