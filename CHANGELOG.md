@@ -78,20 +78,40 @@ new.
 - **Session Resume fix**: detectClaude() dual-path — primary PID scan
   (`~/.claude/sessions/<pid>.json`) + project-dir fallback
   (`~/.claude/projects/<slug>/<uuid>.jsonl`) when PID files are missing
-  (Claude 2.x spawned via cmd.exe). gracefulShutdown reordered: Ctrl+C
-  first (15s timeout) → markExited after, so CLI state flushes to disk.
-- **PostgreSQL mirror**: Docker-managed postgres:16-alpine, incremental
-  jsonl sync, resume repair via PG when CLI session ids change
 - **Xterm fixes**: WebGL glyph atlas 30s periodic cleanup (#88),
   BOOS Muted Dark color palette replacing VSCode Dark+ (#89)
-- **Security audit**: /mcp/* endpoints reviewed — 16 passed, 7 known
-  risks, 0 critical findings (#83)
-- **CI validation**: 3 OS × 2 Node matrix verified, glob fix for
-  tests/unit/ directory (#81)
-- **Cross-platform**: macOS + Linux install scripts CI-verified (#78, #79)
-- **boos_terminal_list MCP tool**: PTY discovery with workspace/cwd/pid (#80)
-- **Agent-Bus tools**: 21 total (wake_agent added), supervisor privileges,
-  workflow DAG engine, decision system
+- **CI validation**: 3 OS × 2 Node matrix verified
+- **Cross-platform**: macOS + Linux install scripts CI-verified
+- **boos_terminal_list MCP tool**: PTY discovery with workspace/cwd/pid
+- **Tests**: 150 pass / 0 fail
+
+### Sprint 7: PostgreSQL 对话记忆持久化 (2026-07-14)
+- **lib/postgres.js**: Docker postgres:16-alpine 容器生命周期管理
+  - 自动拉镜像→启容器→等 healthy→建 DDL，Docker 不可用时降级
+- **lib/conversationSync.js**: 增量 JSONL→PG 同步引擎
+  - 字节偏移游标增量同步，文件截断/轮转检测
+  - content 提取: user/assistant→message.content, tool_use→null
+- **Resume 修复**: sessions-launch new/resume 两处 PG 修复 stale cliSessionId
+- **数据模型**: conversation_files + conversation_turns (JSONB)
+- **Tests**: 15 新增 + 216 全量通过
+
+### Sprint 8: 全自動多Agent協作平台 (2026-07-14) — 17/17 完成
+- **PM 身份系統** (#70): agent.project + pm_of 权限模型, setPM/assignToProject 工具
+- **工作边界约束** (#71): capability 自动路由 + 域外拒绝, fallback 到 generalist
+- **通用助手 Agent** (#72): "通用助手" 兜底路由, capabilities: general/misc/docs/research
+- **任务类型分析** (#73): 1h 滑动窗口, 高频≥5 自动招募建议
+- **协作意愿增强** (#74): idle/busy state + idle-preference 路由 + list_agents status
+- **HR Agent** (#65): 16 角色模板, 中文别名匹配, 自动招募(改 CLAUDE.md + .mcp.json)
+- **通信闭环** (#58-60): outbox 通知 + auto-claim + reply_to 线程回复
+- **工作流链式** (#63): A 完成→B 自动 dispatch
+- **Agent 互唤** (#64): wake_all + wake_agent context 参数
+- **任务超时** (#61): 30min 无响应自动取消
+- **优先级队列** (#67): high→normal→low 排序, 同优 FIFO
+- **失败重试** (#68): retry_task, max 3 次, exhausted on 4th
+- **负载均衡** (#69): round-robin 轮转, 同分 agent 均匀分发
+- **Bug 修复**: CJS await 语法错误, outbox 通知丢包(大小写), retryTask 裸写 JSON 竞态, sendTask/checkInbox 异步竞态
+- **新增 13 文件, 修改 31 文件, +4,500/-100 lines**
+- **Tests**: 37 suites / 216 tests / 0 fail
 
 ---
 

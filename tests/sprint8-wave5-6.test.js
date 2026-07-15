@@ -45,7 +45,7 @@ describe('priority queue (#67)', () => {
     await queue.sendTask({ sender, receiver_uid: recv, content: 'normal', priority: 'normal' });
     await queue.sendTask({ sender, receiver_uid: recv, content: 'high', priority: 'high' });
 
-    const t1 = queue.checkInbox(recv); _trackId(t1?.task_id);
+    const t1 = await queue.checkInbox(recv); _trackId(t1?.task_id);
     assert.ok(t1, 'should have a task');
     assert.equal(t1.priority, 'high');
     assert.ok(t1.content.includes('high'));
@@ -64,7 +64,7 @@ describe('priority queue (#67)', () => {
     await queue.sendTask({ sender, receiver_uid: recv, content: 't1', priority: 'normal' });
     await queue.sendTask({ sender, receiver_uid: recv, content: 't2', priority: 'normal' });
 
-    const t1 = queue.checkInbox(recv); _trackId(t1?.task_id);
+    const t1 = await queue.checkInbox(recv); _trackId(t1?.task_id);
     const t2 = queue.checkInbox(recv); _trackId(t2?.task_id);
     assert.ok(t1.content.includes('t1'));
     assert.ok(t2.content.includes('t2'));
@@ -72,7 +72,7 @@ describe('priority queue (#67)', () => {
 
   it('empty inbox returns null', async () => {
     const recv = await _regAgent('recv');
-    assert.equal(queue.checkInbox(recv), null);
+    assert.equal(await queue.checkInbox(recv), null);
   });
 });
 
@@ -87,7 +87,7 @@ describe('retry (#68)', () => {
     const r = await queue.sendTask({ sender, receiver_uid: recv, content: 'test' });
     _trackId(r.task.task_id);
 
-    queue.checkInbox(recv);
+    await queue.checkInbox(recv);
     await queue.respondTask(r.task.task_id, recv, 'done');
 
     const rr = await queue.retryTask(r.task.task_id, senderUid);
@@ -109,14 +109,14 @@ describe('retry (#68)', () => {
     _trackId(r.task.task_id);
 
     for (let i = 0; i < 3; i++) {
-      queue.checkInbox(recv);
+      await queue.checkInbox(recv);
       await queue.respondTask(r.task.task_id, recv, 'r' + i);
       const rr = await queue.retryTask(r.task.task_id, senderUid);
       assert.ok(rr.ok, 'retry ' + (i + 1) + ' should succeed');
     }
 
     // 4th retry → exhausted.
-    queue.checkInbox(recv);
+    await queue.checkInbox(recv);
     await queue.respondTask(r.task.task_id, recv, 'r3');
     const ex = await queue.retryTask(r.task.task_id, senderUid);
     assert.ok(!ex.ok);
@@ -132,7 +132,7 @@ describe('retry (#68)', () => {
     const r = await queue.sendTask({ sender, receiver_uid: recv, content: 'x' });
     _trackId(r.task.task_id);
 
-    queue.checkInbox(recv);
+    await queue.checkInbox(recv);
     await queue.respondTask(r.task.task_id, recv, 'done');
 
     const rr = await queue.retryTask(r.task.task_id, 'not_the_sender');
@@ -180,7 +180,7 @@ describe('round-robin (#69)', () => {
     // Make busyUid busy.
     const occupy = await queue.sendTask({ sender, receiver_uid: busyUid, content: 'occupy' });
     _trackId(occupy.task.task_id);
-    queue.checkInbox(busyUid);
+    await queue.checkInbox(busyUid);
 
     const r = await queue.sendTask({ sender, content: 'work', required_capabilities: ['testing'] });
     _trackId(r.task.task_id);
