@@ -14,7 +14,7 @@ import {
   createCli, updateCli, deleteCli, setDefaultCli, testCli,
   createRepo, updateRepo, deleteRepo,
   createFolder, renameFolder, deleteFolder, reorderFolders,
-  deleteWorkspace, restartBackend, setFolderRootPath, setFolderAgentLevels, loadFolders,
+  deleteWorkspace, restartBackend, setFolderRootPath, setFolderAgentLevels,
 } from '../api.js';
 import { setToast } from '../toast.js';
 import { boosConfirm } from '../dialog.js';
@@ -416,7 +416,7 @@ export function ConfigurePage() {
           catch (e) { setToast(e.message, 'error'); throw e; }
         }} />` : null}
 
-    ${edit?.kind === 'folder-sandbox' && html`
+    ${edit?.kind === 'folder-sandbox' ? html`
       <${Modal} title=${`沙箱路径 · ${edit.payload.name}`} width=${680}
         onClose=${() => { setEdit(null); }}
         footer=${html`
