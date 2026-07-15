@@ -397,3 +397,99 @@
 .decision-reject:hover {
   background: rgba(183, 63, 63, 0.14) !important;
 }
+
+/* Inline reply */
+.decision-card-reply {
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border-soft);
+}
+.decision-reply-input {
+  width: 100%;
+  max-width: none;
+  min-height: 36px;
+  font-family: var(--body);
+  font-size: 13px;
+  padding: 7px 10px;
+}
+.decision-card-reply-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--s-2);
+}
+
+/* ── read state (dimmed) ────────────────────────────────────────── */
+.decision-card.is-read {
+  opacity: 0.6;
+}
+.decision-card.is-read:hover {
+  opacity: 0.85;
+}
+
+/* ── batch group ────────────────────────────────────────────────── */
+.decision-group {
+  background: var(--bg-elev, #ffffff);
+  border: 1px solid var(--border-soft, #d8e4ee);
+  border-radius: 8px;
+  margin-bottom: var(--s-3, 10px);
+  overflow: hidden;
+}
+.decision-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+.decision-group-head:hover {
+  background: var(--accent-softer, rgba(47, 111, 163, 0.04));
+}
+.decision-group-icon {
+  color: var(--ink-muted, #8a8475);
+  display: flex;
+  align-items: center;
+}
+.decision-group-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.decision-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #1a1815);
+}
+.decision-group-meta {
+  font-size: 11.5px;
+  color: var(--ink-muted, #8a8475);
+}
+.decision-group-body {
+  padding: 8px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2, 6px);
+}
+
+/* ── root agent inbox ───────────────────────────────────────────── */
+.root-inbox-section {
+  margin-bottom: var(--s-4, 16px);
+}
+.root-inbox-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mid, #534e44);
+  padding: 0 2px var(--s-2, 6px);
+  border-bottom: 1px solid var(--border-soft, #d8e4ee);
+  margin-bottom: var(--s-2, 6px);
+}
+.root-task-card {
+  border-color: var(--accent, #2f6fa3);
+  border-left: 3px solid var(--accent, #2f6fa3);
+}
+.root-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #1a1815);
+}

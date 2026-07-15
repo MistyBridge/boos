@@ -451,3 +451,52 @@ input[type="checkbox"]:checked::after {
   transition: color .12s ease, background .12s ease;
 }
 .accent-reset:hover { color: var(--ink-mid); background: var(--bg); }
+
+/* ── folder sandbox path indicators ────────────────────────────── */
+.sandbox-path-bound {
+  color: var(--green, #4a8a4a);
+}
+.sandbox-path-none {
+  color: var(--ink-muted, #8a8475);
+  font-style: italic;
+}
+
+/* ── folder settings modal ──────────────────────────────────────── */
+.folder-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4, 16px);
+}
+.folder-agent-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.folder-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.folder-agent-name {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--ink, #1a1815);
+}
+.level-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.write-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--ink-mid, #534e44);
+  user-select: none;
+}
+.write-toggle input {
+  margin: 0;
+}

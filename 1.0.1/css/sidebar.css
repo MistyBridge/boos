@@ -181,6 +181,32 @@
   color: var(--ink-mid);
 }
 
+/* Pending notification badge (red dot + count) */
+.sidebar-badge {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--red, #b73f3f);
+  color: #fff;
+  font-family: var(--body);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  z-index: 2;
+}
+.sidebar[data-collapsed="true"] .sidebar-badge {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .sidebar-divider {
   margin: var(--s-3) var(--s-2);
   border-top: 1px solid var(--border);

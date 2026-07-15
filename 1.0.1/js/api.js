@@ -237,6 +237,13 @@ export async function reorderFolders(ids) {
   return r.folders;
 }
 
+/** Set or clear a folder's rootPath sandbox. Pass rootPath=null to clear. */
+export async function setFolderRootPath(folderId, rootPath) {
+  const r = await api('PUT', `/api/folders/${encodeURIComponent(folderId)}/root-path`, { rootPath });
+  await loadFolders();
+  return r;
+}
+
 export async function setSessionFolder(sessionId, folderId) {
   await api('PUT', `/api/sessions/${sessionId}`, { folderId: folderId || null });
   await loadSessions();
@@ -446,6 +453,12 @@ export async function rejectDecision(decisionId, comment) {
   return r;
 }
 
+export async function replyDecision(decisionId, body) {
+  const r = await api('POST', `/api/decisions/${encodeURIComponent(decisionId)}/reply`, { body });
+  await fetchDecisions();
+  return r;
+}
+
 let consecutiveOffline = 0;
 export async function pollHealth() {
   const ctrl = new AbortController();
@@ -467,4 +480,61 @@ export async function pollHealth() {
   } finally {
     clearTimeout(t);
   }
+}
+
+// ── Sprint 11: BNTP command API ─────────────────────────────────────
+
+/** Send a BNTP command for an agent via agent-bus. */
+export async function sendAgentCommand(command, sessionId) {
+  return api('POST', '/api/agents/commands', { command, sessionId });
+}
+
+// ── Sprint 9: Agent State API (agent-bus ↔ canvas bridge) ──────────
+
+/** Fetch merged agent-bus + BOOS session state. */
+export async function fetchAgents() {
+  const r = await api('GET', '/api/agents');
+  return r;
+}
+
+/**
+ * Subscribe to agent state changes via SSE.
+ * Calls onActivity({sessionId, activity, uid, name, pending}) on each event.
+ * Returns an unsubscribe function.
+ */
+export function subscribeAgentEvents(onActivity) {
+  const base = httpBase();
+  const url = base ? `${base}/api/agents/events` : '/api/agents/events';
+  const es = new EventSource(url);
+
+  es.addEventListener('activity', (e) => {
+    try { onActivity(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener('registry', (e) => {
+    try { onActivity({ ...JSON.parse(e.data), type: 'registry' }); } catch {}
+  });
+  es.addEventListener('snapshot', (e) => {
+    try { onActivity({ ...JSON.parse(e.data), type: 'snapshot' }); } catch {}
+  });
+
+  es.onerror = () => {
+    // EventSource auto-reconnects; no action needed.
+  };
+
+  return () => es.close();
+}
+
+// ── Sprint 11: Root Agent Inbox ───────────────────────────────────
+
+/** Reply to a root agent inbox task from the DecisionsPage UI. */
+// Sprint 13.3 P1 fix: use api() wrapper for auth headers (was raw fetch).
+export async function respondRootTask(taskId, result) {
+  return api('POST', '/api/decisions/root-respond', { task_id: taskId, result });
+}
+
+/** Set agent permission levels for a folder. levels: { "uid": "PM"|"SE" } */
+export async function setFolderAgentLevels(folderId, levels) {
+  const r = await api('PUT', `/api/folders/${encodeURIComponent(folderId)}/agent-levels`, { levels });
+  await loadFolders();
+  return r;
 }
