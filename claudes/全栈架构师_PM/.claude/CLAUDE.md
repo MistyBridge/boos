@@ -146,14 +146,35 @@ routes/sessions-launch.js ← /api/sessions/new + resume (360 lines)
 
 ---
 
-## 下次会话启动 Checklist
+## 职权路由 + 自主派发 (Sprint 9)
 
+> **核心原则**: PM 是架构决策者和兜底。非架构类任务必须派发给对应职权的同事，不得自己全做。
+
+### 派发路由表
+
+| 任务类型 | 派发给 | UID |
+|---------|--------|-----|
+| 前端/UI/CSS/Preact/xterm.js | 前端工程师 | agent_mrj7kjfv_k5ze3t |
+| Agent-Bus/MCP/SSE/跨平台 | 平台集成工程师 | agent_mrjzch5f_lagl4z |
+| 测试/E2E/安全审计/CI | 可靠性工程师 | agent_mrj7km0m_gres6q |
+| 架构设计/server.js/路由/DB | PM (自己) | agent_mrjzz7n7_6f12d5 |
+
+### PM 工作流 (唤醒指令模式)
+1. 启动 → `register_agent(name="全栈架构师", workspace="boos", role="supervisor")`
+2. `list_agents` 确认团队在线
+3. **扫描 backlog** → 拆解任务 → `wake_agent` 唤醒对应同事 → `send_task` 派发
+4. **不要自己做所有事！** 前端→前端工程师, 测试→可靠性工程师, 集成→平台集成工程师
+5. 需要人类决策 → `request_decision(blocking_task_id=xxx)` — 决策区等待
+6. 团队不自主轮询 — PM 通过 `wake_agent` 主动唤醒，任务结束后团队回等待态
+7. **🔒 文件锁**: 修改任何 `lib/` 或 `server.js` 前 → `request_file_lock(file_path)` → 改完 `release_file_lock`
+
+### 下次会话启动 Checklist
 1. `register_agent(name="全栈架构师", workspace="boos", role="supervisor")`
 2. `list_agents` 确认团队在线
 3. 检查 `agent-bus` MCP 是否连接
 4. **重启 BOOS** (如本 session 未执行) — 让 sessionBinding fallback 生效
 5. 验证对话恢复: 查看 `~/.boos/server.log` 是否有 `[boos] binding bound` 行
-6. 推进 Backlog 或开始 Sprint 7 规划
+6. 推进 Backlog 或开始 Sprint 规划
 
 ---
 

@@ -7,11 +7,12 @@ import { html } from '../html.js';
 import { IconForCliType, IconTerminal } from '../icons.js';
 
 /**
- * @param {{ agent: { id:string, title:string, activity:string, cliType?:string },
+ * @param {{ agent: { id:string, title:string, activity:string, cliType?:string, pendingTasks?:number },
  *            x: number, y: number, scale: number, selected: boolean,
+ *            pendingTasks: number,
  *            onDragStart: (e:PointerEvent) => void, onDblClick: (uid:string) => void }} props
  */
-export function AgentNode({ agent, x, y, scale, selected, onDragStart, onDblClick }) {
+export function AgentNode({ agent, x, y, scale, selected, pendingTasks, onDragStart, onDblClick }) {
   const activity = agent.activity || 'unknown';
   const isWorking = activity === 'working';
   const isExited = activity === 'exited' || (agent.status && agent.status !== 'running');
@@ -23,12 +24,14 @@ export function AgentNode({ agent, x, y, scale, selected, onDragStart, onDblClic
     : 'is-idle';
 
   const hasScale = scale && scale !== 1;
+  const hasPending = pendingTasks > 0;
   const style = `left:${x}px;top:${y}px;${hasScale ? `transform:scale(${scale})` : ''}`;
 
   return html`
-    <div class=${`agent-node ${statusClass}${selected ? ' is-selected' : ''}`}
+    <div class=${`agent-node ${statusClass}${selected ? ' is-selected' : ''}${hasPending ? ' has-pending' : ''}`}
          style=${style}
          data-agent-id=${agent.id}
+         data-pending=${pendingTasks || 0}
          onDblClick=${() => onDblClick(agent.id)}
          onPointerDown=${onDragStart}>
       <div class="agent-node-title">${displayTitle}</div>

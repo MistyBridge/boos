@@ -18,8 +18,110 @@ const { spawnSync } = require('node:child_process');
 function log(msg)  { process.stdout.write(`[boos install] ${msg}\n`); }
 function warn(msg) { process.stderr.write(`[boos install] ${msg}\n`); }
 
+if (process.platform === 'darwin') {
+  // macOS: register boos:// URL protocol via a minimal application bundle.
+  // Creates ~/Applications/boos-handler.app with Info.plist declaring
+  // CFBundleURLTypes for the boos:// scheme. The executable is a small
+  // shell script that forwards to `boos`.
+  try {
+    const home = os.homedir();
+    const appDir = path.join(home, 'Applications', 'boos-handler.app');
+    const contentsDir = path.join(appDir, 'Contents');
+    const macosDir = path.join(contentsDir, 'MacOS');
+    fs.mkdirSync(macosDir, { recursive: true });
+
+    // Write the launcher script.
+    const launcherPath = path.join(macosDir, 'boos-handler');
+    fs.writeFileSync(launcherPath, [
+      '#!/bin/bash',
+      '# boos protocol handler for macOS',
+      'exec boos "$@"',
+      '',
+    ].join('\n'), { mode: 0o755 });
+
+    // Write Info.plist with CFBundleURLTypes.
+    const plistPath = path.join(contentsDir, 'Info.plist');
+    fs.writeFileSync(plistPath, [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"',
+      '  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+      '<plist version="1.0">',
+      '<dict>',
+      '  <key>CFBundleIdentifier</key>',
+      '  <string>com.mistybridge.boos</string>',
+      '  <key>CFBundleName</key>',
+      '  <string>BOOS</string>',
+      '  <key>CFBundleVersion</key>',
+      '  <string>1.0</string>',
+      '  <key>CFBundleExecutable</key>',
+      '  <string>boos-handler</string>',
+      '  <key>CFBundleURLTypes</key>',
+      '  <array>',
+      '    <dict>',
+      '      <key>CFBundleURLName</key>',
+      '      <string>BOOS Protocol</string>',
+      '      <key>CFBundleURLSchemes</key>',
+      '      <array>',
+      '        <string>boos</string>',
+      '      </array>',
+      '    </dict>',
+      '  </array>',
+      '</dict>',
+      '</plist>',
+      '',
+    ].join('\n'));
+
+    log(`macOS boos:// handler · ${appDir}`);
+  } catch (e) {
+    warn(`macOS boos:// registration failed · ${e.message}`);
+    warn('run `boos` manually in a terminal, or create the app bundle at ~/Applications/boos-handler.app');
+  }
+
+  process.exit(0);
+}
+
+if (process.platform === 'linux') {
+  // Linux: register boos:// URL protocol via a .desktop file with
+  // MimeType=x-scheme-handler/boos. xdg-open will dispatch boos://
+  // links to the `boos` command.
+  try {
+    const home = os.homedir();
+    const appsDir = path.join(home, '.local', 'share', 'applications');
+    fs.mkdirSync(appsDir, { recursive: true });
+
+    const desktopPath = path.join(appsDir, 'boos.desktop');
+    fs.writeFileSync(desktopPath, [
+      '[Desktop Entry]',
+      'Type=Application',
+      'Name=BOOS',
+      'Comment=Claude Code Session Manager',
+      'Exec=boos %u',
+      'Terminal=false',
+      'MimeType=x-scheme-handler/boos',
+      'NoDisplay=true',
+      '',
+    ].join('\n'));
+
+    // Register the MIME type with the desktop environment.
+    const { spawnSync } = require('child_process');
+    try {
+      spawnSync('update-desktop-database', [appsDir], { stdio: 'ignore' });
+    } catch {}
+    try {
+      spawnSync('xdg-mime', ['default', 'boos.desktop', 'x-scheme-handler/boos'], { stdio: 'ignore' });
+    } catch {}
+
+    log(`Linux boos:// handler · ${desktopPath}`);
+  } catch (e) {
+    warn(`Linux boos:// registration failed · ${e.message}`);
+    warn('run `boos` manually in a terminal.');
+  }
+
+  process.exit(0);
+}
+
 if (process.platform !== 'win32') {
-  log('non-Windows · skipping boos:// registration');
+  log('unknown platform · skipping boos:// registration');
   process.exit(0);
 }
 // Note: we DO register on npx-cache installs too (not just global). The

@@ -12,12 +12,17 @@ const collaborationLoop = require('../lib/agentBus/collaborationLoop');
 
 const TEST_PREFIX = 'test_w56_';
 let _cleanupIds = [];
+let _cleanupAgentIds = [];
 
 async function _cleanup() {
   for (const tid of _cleanupIds) {
-    try { store.updateTaskStatus(tid, 'cancelled', 'test cleanup'); } catch {}
+    try { await store.updateTaskStatus(tid, 'cancelled', 'test cleanup'); } catch {}
+  }
+  for (const uid of _cleanupAgentIds) {
+    try { await store.deleteAgent(uid); } catch {}
   }
   _cleanupIds = [];
+  _cleanupAgentIds = [];
 }
 
 // Register a test agent, track for cleanup.
@@ -25,6 +30,7 @@ let _nextAgentIdx = 0;
 async function _regAgent(name, caps = [], role = 'worker') {
   const uid = TEST_PREFIX + 'agent_' + (_nextAgentIdx++);
   await store.insertAgent({ uid, name, intro: '', workspace: 'test_w56', role, capabilities: caps });
+  _cleanupAgentIds.push(uid);
   return uid;
 }
 
@@ -46,14 +52,15 @@ describe('priority queue (#67)', () => {
     await queue.sendTask({ sender, receiver_uid: recv, content: 'high', priority: 'high' });
 
     const t1 = await queue.checkInbox(recv); _trackId(t1?.task_id);
+    await new Promise(r => setTimeout(r, 100));
     assert.ok(t1, 'should have a task');
     assert.equal(t1.priority, 'high');
     assert.ok(t1.content.includes('high'));
 
-    const t2 = queue.checkInbox(recv); _trackId(t2?.task_id);
+    const t2 = await queue.checkInbox(recv); _trackId(t2?.task_id);
     assert.equal(t2.priority, 'normal');
 
-    const t3 = queue.checkInbox(recv); _trackId(t3?.task_id);
+    const t3 = await queue.checkInbox(recv); _trackId(t3?.task_id);
     assert.equal(t3.priority, 'low');
   });
 
@@ -65,7 +72,7 @@ describe('priority queue (#67)', () => {
     await queue.sendTask({ sender, receiver_uid: recv, content: 't2', priority: 'normal' });
 
     const t1 = await queue.checkInbox(recv); _trackId(t1?.task_id);
-    const t2 = queue.checkInbox(recv); _trackId(t2?.task_id);
+    const t2 = await queue.checkInbox(recv); _trackId(t2?.task_id);
     assert.ok(t1.content.includes('t1'));
     assert.ok(t2.content.includes('t2'));
   });
@@ -95,7 +102,7 @@ describe('retry (#68)', () => {
     assert.equal(rr.retry_count, 1);
     assert.equal(rr.remaining, 2);
 
-    const reloaded = store.getTask(r.task.task_id);
+    const reloaded = await store.getTaskAsync(r.task.task_id);
     assert.equal(reloaded.status, 'pending');
     assert.equal(reloaded.retry_count, 1);
   });
@@ -121,7 +128,8 @@ describe('retry (#68)', () => {
     const ex = await queue.retryTask(r.task.task_id, senderUid);
     assert.ok(!ex.ok);
     assert.ok(ex.exhausted);
-    assert.equal(store.getTask(r.task.task_id).status, 'exhausted');
+    const rel = await store.getTaskAsync(r.task.task_id);
+    assert.equal(rel.status, 'exhausted');
   });
 
   it('only sender can retry', async () => {

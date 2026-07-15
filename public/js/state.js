@@ -59,6 +59,12 @@ export const isInstalledPwa   = signal(false);           // running inside an in
 export const sessionFilter    = signal('');              // search/filter string for sidebar session tree
 export const decisions        = signal([]);              // decision records from /api/decisions
 
+// ── derived signals ───────────────────────────────────────────────
+export const pendingDecisionCount = computed(() => {
+  const ds = decisions.value || [];
+  return ds.filter((d) => d.status === 'open').length;
+});
+
 // ── workspace view state ─────────────────────────────────────────
 export const workspaceAgentPositions = signal({});  // { uid: {x, y} } — persisted per workspace
 export const workspaceSplitRatio    = signal(0.5);  // canvas/terminal split ratio

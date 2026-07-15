@@ -27,10 +27,15 @@ function register(app, deps) {
   const path = require('node:path');
   const os = require('node:os');
 
+  // ── Rate limiters ────────────────────────────────────────────────────
+  const { createRateLimiter } = require('../lib/rateLimiter');
+  const newSessionLimiter = createRateLimiter({ windowMs: 60_000, max: 5 });
+  const resumeLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
+
   // ---- new session ----
   // body: { cliId?, repos?, workspace?, folderId?, launch?: true }
   // Streams NDJSON: workspace / clone-* / launched / done.
-  app.post('/api/sessions/new', async (req, res) => {
+  app.post('/api/sessions/new', newSessionLimiter, async (req, res) => {
     res.setHeader('Content-Type', 'application/x-ndjson');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('X-Accel-Buffering', 'no');
@@ -99,7 +104,7 @@ function register(app, deps) {
       const failed = cloneResults.filter((r) => !r.ok);
       if (failed.length > 0) return fail('Some repos failed to clone', { cloneResults });
 
-      // Auto-inject agent-bus MCP config
+      // Auto-inject agent-bus MCP config + sandbox-aware filesystem.
       if (shouldLaunch) {
         const mcpPath = path.join(launchCwd, '.mcp.json');
         try {
@@ -108,6 +113,9 @@ function register(app, deps) {
             const raw = await require('node:fs/promises').readFile(mcpPath, 'utf-8');
             existing = JSON.parse(raw);
           } catch {}
+          // Compute sandbox-aware filesystem config.
+          const sandbox = require('../lib/sandbox');
+          const fsConfig = await sandbox.getFilesystemMcpConfig({ folderId: body.folderId });
           const merged = {
             ...existing,
             mcpServers: {
@@ -116,6 +124,7 @@ function register(app, deps) {
                 type: 'sse',
                 url: `http://127.0.0.1:${getState().currentPort}/mcp/sse`,
               },
+              filesystem: fsConfig,
             },
           };
           await require('node:fs/promises').mkdir(path.dirname(mcpPath), { recursive: true });
@@ -171,6 +180,21 @@ function register(app, deps) {
             resume: !!inheritedCliSessionId,
             extraCliArgs: promptExtraArgs,
           });
+
+          // Sprint 13: update agent identity card after session launch.
+          try {
+            const store = require('../lib/agentBus/store');
+            const allAgents = store.listAllAgents();
+            const matched = allAgents.find(a => require('path').basename(launchCwd || '') === a.name);
+            if (matched) {
+              await store.upsertIdentity(matched.uid, {
+                boos_session_id: record.id, cwd: launchCwd,
+                pty_pid: launched?.pid || null, name: matched.name,
+                workspace: matched.workspace, role: matched.role || 'worker',
+              });
+            }
+          } catch (e) { /* best-effort */ }
+
           emit({ type: 'launched', launched });
         } catch (e) {
           await persistedSessions.markExited(record.id, null);
@@ -187,7 +211,7 @@ function register(app, deps) {
   });
 
   // ---- resume a previous session ----
-  app.post('/api/sessions/:id/resume', asyncH(async (req, res) => {
+  app.post('/api/sessions/:id/resume', resumeLimiter, asyncH(async (req, res) => {
     let record = await persistedSessions.get(req.params.id);
     if (!record) return res.status(404).json({ error: 'session not found' });
     const live = webTerminal.get(record.id);
@@ -229,6 +253,24 @@ function register(app, deps) {
     if (!cli) return res.status(400).json({ error: `CLI ${record.cliId} no longer configured` });
     try {
       const launched = await spawnSessionRecord({ record, cli, cfg, body: req.body, resume: true });
+      // Sprint 13: update agent identity card after session resume.
+      try {
+        const store = require('../lib/agentBus/store');
+        const identity = store.getIdentityByBoosSession(record.id);
+        if (identity) {
+          await store.upsertIdentity(identity.agent_uid, { pty_pid: launched?.pid || null, cwd: record.cwd });
+        } else {
+          const allAgents = store.listAllAgents();
+          const matched = allAgents.find(a => require('path').basename(record.cwd || '') === a.name);
+          if (matched) {
+            await store.upsertIdentity(matched.uid, {
+              boos_session_id: record.id, cwd: record.cwd,
+              pty_pid: launched?.pid || null, name: matched.name,
+              workspace: matched.workspace, role: matched.role || 'worker',
+            });
+          }
+        }
+      } catch (e) { /* best-effort */ }
       res.json({ launched });
     } catch (e) {
       res.status(500).json({ error: e.message });

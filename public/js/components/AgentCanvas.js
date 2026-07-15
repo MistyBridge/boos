@@ -180,6 +180,7 @@ export function AgentCanvas({ agents, positions, activeAgentId, onSelectAgent, o
             y=${pos.y}
             scale=${1}
             selected=${selected}
+            pendingTasks=${agent.pendingTasks || 0}
             onDragStart=${_onDragStart(agent.id)}
             onDblClick=${onSelectAgent}
           />`;

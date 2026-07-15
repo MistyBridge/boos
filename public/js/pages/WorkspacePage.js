@@ -11,6 +11,8 @@ import {
   sessions, config, activeSessionId, selectSession, selectWorkspaceAgent,
   workspaceAgentActivity, workspaceFolderId, sessionsByFolder, folders,
 } from '../state.js';
+import { fetchAgents, subscribeAgentEvents, sendAgentCommand } from '../api.js';
+import { setToast } from '../toast.js';
 // Layout persisted in localStorage (keyed by workspace name) —
 // avoids dependency on physical workspace directories.
 const LS_LAYOUT_PREFIX = 'boos.workspace-layout.';
@@ -113,7 +115,69 @@ export function WorkspacePage() {
   const [layout, setLayout] = useState({ agentPositions: {}, splitRatio: 0.5 });
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pendingCounts, setPendingCounts] = useState({});
   const pageRef = useRef(null);
+
+  // ── BNTP command bar state ─────────────────────────────────────────
+  const [bntpCommand, setBntpCommand] = useState('');
+  const [showBntpHelp, setShowBntpHelp] = useState(false);
+  const [bntpSubmitting, setBntpSubmitting] = useState(false);
+  const bntpInputRef = useRef(null);
+
+  // Autocomplete: detect @task <partial> and suggest agent names.
+  const _bntpSuggestions = (() => {
+    const m = bntpCommand.match(/^@task\s+(\S*)$/);
+    if (!m) return [];
+    const partial = m[1].toLowerCase();
+    if (!partial) return agentList.slice(0, 6).map((a) => a.title);
+    return agentList
+      .filter((a) => a.title.toLowerCase().startsWith(partial))
+      .slice(0, 6)
+      .map((a) => a.title);
+  })();
+
+  // ── agent-bus → canvas bridge ─────────────────────────────────────
+
+  // Bootstrap: fetch merged agent state on mount, seed activity + pending maps.
+  useEffect(() => {
+    fetchAgents().then((r) => {
+      const act = { ...workspaceAgentActivity.value };
+      const pnd = {};
+      for (const a of r.agents || []) {
+        if (a.sessionId) {
+          act[a.sessionId] = a.agentBusActivity === 'busy' ? 'working' : 'idle';
+          pnd[a.sessionId] = a.pendingTasks || 0;
+        }
+      }
+      workspaceAgentActivity.value = act;
+      setPendingCounts(pnd);
+    }).catch(() => {});
+  }, []);
+
+  // SSE: subscribe to real-time agent activity + task count changes.
+  useEffect(() => {
+    const unsub = subscribeAgentEvents((data) => {
+      if (data.type === 'snapshot') {
+        const pnd = {};
+        for (const a of data.agents || []) {
+          if (a.sessionId) pnd[a.sessionId] = a.pendingTasks || 0;
+        }
+        setPendingCounts(pnd);
+        return;
+      }
+      if (data.type === 'registry') return;
+      // activity event: update status + pending count.
+      if (data.sessionId) {
+        const isBusy = data.activity === 'busy' || data.activity === 'woken';
+        workspaceAgentActivity.value = {
+          ...workspaceAgentActivity.value,
+          [data.sessionId]: isBusy ? 'working' : 'idle',
+        };
+        setPendingCounts((prev) => ({ ...prev, [data.sessionId]: data.pending || 0 }));
+      }
+    });
+    return unsub;
+  }, []);
 
   // ── build agent list ─────────────────────────────────────────────
   const agentList = agentSessions.map((s) => ({
@@ -123,6 +187,7 @@ export function WorkspacePage() {
     status: s.status,
     cliId: s.cliId,
     cliType: clis.find((c) => c.id === s.cliId)?.type,
+    pendingTasks: pendingCounts[s.id] || 0,
   }));
 
   const selectedAgent = agentList.find((a) => a.id === sid) || null;
@@ -205,6 +270,42 @@ export function WorkspacePage() {
     selectWorkspaceAgent(uid);
   }, []);
 
+  // ── BNTP handlers ──────────────────────────────────────────────────
+
+  const _handleBntpSend = useCallback(async () => {
+    const cmd = bntpCommand.trim();
+    if (!cmd) return;
+
+    if (cmd === '@help') {
+      setShowBntpHelp(true);
+      setBntpCommand('');
+      return;
+    }
+
+    setBntpSubmitting(true);
+    try {
+      await sendAgentCommand(cmd, sid);
+      setToast('命令已发送');
+      setBntpCommand('');
+    } catch (e) {
+      setToast(e.message || '命令发送失败', 'error');
+    } finally {
+      setBntpSubmitting(false);
+    }
+  }, [bntpCommand, sid]);
+
+  const _handleBntpKeyDown = useCallback((e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      _handleBntpSend();
+    }
+  }, [_handleBntpSend]);
+
+  const _fillSuggestion = useCallback((name) => {
+    setBntpCommand(`@task ${name} `);
+    if (bntpInputRef.current) bntpInputRef.current.focus();
+  }, []);
+
   // ── render ──────────────────────────────────────────────────────
 
   const splitPct = Math.round(layout.splitRatio * 100);
@@ -217,13 +318,54 @@ export function WorkspacePage() {
     <div class="workspace-page" ref=${pageRef}
          style=${{ '--split-ratio': layout.splitRatio }}>
       <div class="workspace-canvas-pane" style=${{ flex: `${splitPct} 0 0` }}>
-        <${AgentCanvas}
-          agents=${agentList}
-          positions=${layout.agentPositions}
-          activeAgentId=${sid}
-          onSelectAgent=${_handleSelectAgent}
-          onSaveLayout=${_handleSaveLayout}
-        />
+        <div class="workspace-bntp-bar">
+          <div class="bntp-input-wrap">
+            <input
+              ref=${bntpInputRef}
+              class="bntp-input"
+              type="text"
+              placeholder="@task <agent> <内容>  |  @done <id> <结果>  |  @tasks  |  @agents  |  @help"
+              value=${bntpCommand}
+              onInput=${(ev) => setBntpCommand(ev.target.value)}
+              onKeyDown=${_handleBntpKeyDown}
+            />
+            ${_bntpSuggestions.length > 0 && html`
+              <div class="bntp-suggestions">
+                ${_bntpSuggestions.map((name) => html`
+                  <div class="bntp-suggestion-item" onClick=${() => _fillSuggestion(name)}>${name}</div>
+                `)}
+              </div>
+            `}
+          </div>
+          <button class="action small primary"
+                  onClick=${_handleBntpSend}
+                  disabled=${bntpSubmitting || !bntpCommand.trim()}>发送</button>
+          <button class="action small subtle bntp-help-btn"
+                  onClick=${() => setShowBntpHelp(!showBntpHelp)}
+                  title="BNTP 帮助">?</button>
+        </div>
+        ${showBntpHelp && html`
+          <div class="workspace-bntp-help">
+            <h4>BNTP 命令格式</h4>
+            <table class="bntp-help-table">
+              <tr><td>@task &lt;agent&gt; &lt;内容&gt;</td><td>向指定 agent 发送任务</td></tr>
+              <tr><td>@done &lt;id&gt; &lt;结果&gt;</td><td>标记任务完成并回复结果</td></tr>
+              <tr><td>@tasks</td><td>查看自己的待办任务列表</td></tr>
+              <tr><td>@agents</td><td>列出所有在线 agent</td></tr>
+              <tr><td>@help</td><td>显示此帮助面板</td></tr>
+            </table>
+            <div class="bntp-help-hint">Enter 发送 · Shift+Enter 换行 · 输入 @task 空格自动补全 agent 名称</div>
+          </div>
+        `}
+        <div class="workspace-canvas-wrap">
+          <${AgentCanvas}
+            agents=${agentList}
+            positions=${layout.agentPositions}
+            activeAgentId=${sid}
+            onSelectAgent=${_handleSelectAgent}
+            onSaveLayout=${_handleSaveLayout}
+          />
+        </div>
       </div>
       <div class="workspace-split-handle"
            onPointerDown=${_onSplitDragStart}>

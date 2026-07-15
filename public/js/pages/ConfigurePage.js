@@ -14,7 +14,7 @@ import {
   createCli, updateCli, deleteCli, setDefaultCli, testCli,
   createRepo, updateRepo, deleteRepo,
   createFolder, renameFolder, deleteFolder, reorderFolders,
-  deleteWorkspace, restartBackend,
+  deleteWorkspace, restartBackend, setFolderRootPath, setFolderAgentLevels, loadFolders,
 } from '../api.js';
 import { setToast } from '../toast.js';
 import { boosConfirm } from '../dialog.js';
@@ -27,6 +27,8 @@ import { EntityFormModal } from '../components/EntityFormModal.js';
 import { useDragSort } from '../components/useDragSort.js';
 import { IconPlus, IconPencil, IconClose, IconTerminal, IconFolder, IconBranch, IconRefresh, IconChevronUp, IconChevronDown, IconForCliType, IconClaudeColor, IconCodexColor, IconCopilotColor, IconSun, IconMoon, IconMonitor } from '../icons.js';
 import { parseArgs, formatArgs } from '../util.js';
+import { DirectoryPicker } from '../components/DirectoryPicker.js';
+import { Modal } from '../components/Modal.js';
 
 // Tokenize the free-form args fields into string[] before they hit
 // the backend. Form values arrive as strings (text inputs) — backend
@@ -138,6 +140,7 @@ const folderFields = [
 export function ConfigurePage() {
   const cfg = config.value;
   const [edit, setEdit] = useState(null); // { kind, payload? }
+  const [sandboxPath, setSandboxPath] = useState('');
   const [general, setGeneral] = useState(null);
   const [savedAt, setSavedAt] = useState('');
 
@@ -312,6 +315,22 @@ export function ConfigurePage() {
       />
     </${Section}>
 
+    <${Section} title="文件夹沙箱"
+                meta=${html`限制 agent 文件访问范围。设置后该文件夹下所有 agent 将被限制在此路径内。<b>PM 不受限制</b>。`}>
+      <${FolderSandboxList}
+        folders=${folders.value}
+        onSet=${(f) => { setSandboxPath(f.rootPath || ''); setEdit({ kind: 'folder-sandbox', payload: f }); }}
+        onClear=${async (f) => {
+          const ok = await boosConfirm(`清除「${f.name}」的沙箱路径？该文件夹下 agent 将不再受限。`, { okLabel: '清除', danger: false });
+          if (!ok) return;
+          try {
+            await setFolderRootPath(f.id, null);
+            setToast(`已清除 ${f.name} 的沙箱路径`);
+          } catch (e) { setToast(e.message, 'error'); }
+        }}
+      />
+    </${Section}>
+
     <${Section} title="工作空间"
                 meta=${html`自动分配的工作目录下的 <code>ws-N</code> 文件夹。每个包含一个或多个仓库克隆。`}>
       <div class="config-grid">
@@ -396,6 +415,159 @@ export function ConfigurePage() {
           try { await renameFolder(edit.payload.id, v.name.trim()); await loadFolders(); setToast('已重命名'); }
           catch (e) { setToast(e.message, 'error'); throw e; }
         }} />` : null}
+
+    ${edit?.kind === 'folder-sandbox' && html`
+      <${Modal} title=${`沙箱路径 · ${edit.payload.name}`} width=${680}
+        onClose=${() => { setEdit(null); }}
+        footer=${html`
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button class="action" onClick=${() => setEdit(null)}>取消</button>
+            <button class="action primary"
+                    onClick=${async () => {
+                      if (!sandboxPath) return;
+                      try {
+                        await setFolderRootPath(edit.payload.id, sandboxPath);
+                        setToast(`已设置 ${edit.payload.name} 沙箱路径`);
+                        setEdit(null);
+                      } catch (e) { setToast(e.message, 'error'); }
+                    }}
+                    disabled=${!sandboxPath}>保存</button>
+          </div>
+        `}>
+        <${DirectoryPicker} initialPath=${sandboxPath || ''}
+                            onPick=${(p) => setSandboxPath(p)} />
+      </${Modal}>
+    ` : null}
+  `;
+}
+
+// ── FolderSettingsModal — sidebar gear button opens this modal ────────
+export function FolderSettingsModal({ folder, agents, onClose }) {
+  const [rootPath, setRootPath] = useState(folder ? (folder.rootPath || '') : '');
+  const [levels, setLevels] = useState(folder ? (folder.agentLevels || {}) : {});
+  const [saving, setSaving] = useState(false);
+  const [pickOpen, setPickOpen] = useState(false);
+
+  if (!folder) return null;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (rootPath !== (folder.rootPath || '')) {
+        await setFolderRootPath(folder.id, rootPath || null);
+      }
+      await setFolderAgentLevels(folder.id, levels);
+      setToast('文件夹设置已保存');
+      onClose();
+      await loadFolders();
+    } catch (e) {
+      setToast(e.message, 'error');
+    } finally { setSaving(false); }
+  };
+
+  const setAgentLevel = (uid, lv) => {
+    setLevels((prev) => ({ ...prev, [uid]: lv }));
+  };
+
+  // Update a single field on an agent level. Normalizes old string format.
+  // Sprint 13.3 P0 fix: when switching to PM, auto-enable write permission.
+  const updateAgentLevel = (uid, field, value) => {
+    setLevels((prev) => {
+      const cur = prev[uid];
+      const current = typeof cur === 'string'
+        ? { sandbox: cur, write: cur === 'PM' }
+        : (cur || { sandbox: 'SE', write: false });
+      const patch = { ...current, [field]: value };
+      if (field === 'sandbox' && value === 'PM') patch.write = true;
+      return { ...prev, [uid]: patch };
+    });
+  };
+
+  // Normalize a level value from old string or new object format.
+  const _normalizeLevel = (lv) => {
+    if (typeof lv === 'string') return { sandbox: lv, write: lv === 'PM' };
+    return lv || { sandbox: 'SE', write: false };
+  };
+
+  const removeAgentLevel = (uid) => {
+    setLevels((prev) => {
+      const next = { ...prev };
+      delete next[uid];
+      return next;
+    });
+  };
+
+  return html`
+    <${Modal} onClose=${onClose} title=${'文件夹设置: ' + folder.name} width=${480}
+      footer=${html`
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="action" onClick=${onClose}>取消</button>
+          <button class="action primary" onClick=${handleSave} disabled=${saving}>
+            ${saving ? '保存中…' : '保存'}
+          </button>
+        </div>
+      `}>
+      <div class="folder-settings-body">
+        <label class="field">
+          <span class="label">磁盘路径绑定 (Sandbox)</span>
+          <div style="display:flex;gap:8px;">
+            <input type="text" value=${rootPath} onInput=${(e) => setRootPath(e.target.value)}
+                   placeholder="留空则不限" style="flex:1;font-family:var(--mono);font-size:12px;" />
+            <button class="action small" onClick=${() => setPickOpen(!pickOpen)}>浏览</button>
+          </div>
+          <span class="hint">设置后 SE 级 agent 的文件操作将被限制在此目录内。PM 不受限制。</span>
+          ${pickOpen ? html`
+            <div style="margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:300px;">
+              <${DirectoryPicker} initialPath=${rootPath || ''} onPick=${(p) => { setRootPath(p); setPickOpen(false); }} />
+            </div>
+          ` : null}
+        </label>
+
+        <label class="field">
+          <span class="label">Agent 权限等级</span>
+          <div class="folder-agent-levels">
+            ${(agents || []).length === 0 ? html`
+              <span class="hint">该文件夹下暂无可配置的 agent。</span>
+            ` : (agents || []).map((agent) => {
+              const uid = agent.uid || agent.id;
+              const name = agent.name || agent.title || uid;
+              const raw = levels[uid] || '';
+              const lv = _normalizeLevel(raw === '' ? undefined : raw);
+              const isPM = lv.sandbox === 'PM';
+              const hasLevel = raw !== '';
+              return html`
+                <div class="folder-agent-row" key=${uid}>
+                  <span class="folder-agent-name"><span class="mono">${name}</span></span>
+                  <div class="level-controls">
+                    <div class="seg" role="group" aria-label=${'权限: ' + name}>
+                      <button type="button"
+                              class=${`seg-btn${isPM && hasLevel ? ' is-active' : ''}`}
+                              onClick=${() => updateAgentLevel(uid, 'sandbox', 'PM')}>PM</button>
+                      <button type="button"
+                              class=${`seg-btn${!isPM && hasLevel ? ' is-active' : ''}`}
+                              onClick=${() => updateAgentLevel(uid, 'sandbox', 'SE')}>SE</button>
+                    </div>
+                    ${!isPM && hasLevel ? html`
+                      <label class="write-toggle">
+                        <input type="checkbox" checked=${lv.write}
+                               onChange=${(e) => updateAgentLevel(uid, 'write', e.target.checked)} />
+                        <span>代码写入</span>
+                      </label>
+                    ` : hasLevel ? html`
+                      <span class="hint" style="font-size:11px;">写权限: 是</span>
+                    ` : null}
+                  </div>
+                  ${hasLevel ? html`
+                    <button class="action small subtle" title="清除"
+                            onClick=${() => removeAgentLevel(uid)}
+                            style="margin-left:4px;">×</button>` : null}
+                </div>`;
+            })}
+          </div>
+          <span class="hint">PM: 不受路径限制。SE: 受 Sandbox 路径限制。</span>
+        </label>
+      </div>
+    </${Modal}>
   `;
 }
 
@@ -437,6 +609,38 @@ function EntityList({ items, onAdd, onEdit, onDelete, onActivate, emptyHint, dnd
       <button class="entity-add" type="button" onClick=${onAdd}>
         <span>${addLabel}</span>
       </button>
+    </div>`;
+}
+
+// ── Folder sandbox list ───────────────────────────────────────────────
+function FolderSandboxList({ folders, onSet, onClear }) {
+  if (!folders || folders.length === 0) {
+    return html`<div class="entity-empty">暂无文件夹。在"文件夹"区域创建后可在此设置沙箱。</div>`;
+  }
+  return html`
+    <div class="entity-list">
+      ${folders.map((f) => {
+        const hasRoot = !!f.rootPath;
+        return html`
+          <div class="entity-row" key=${f.id}>
+            <span class="entity-row-icon"><${IconFolder} /></span>
+            <span class="entity-row-main">
+              <span class="entity-row-primary">${f.name}</span>
+              <span class="entity-row-secondary">
+                ${hasRoot
+                  ? html`<span class="mono sandbox-path-bound">${f.rootPath}</span>`
+                  : html`<span class="sandbox-path-none">未设置沙箱</span>`}
+              </span>
+            </span>
+            <span class="entity-row-actions">
+              <button class="entity-row-action" title="设置沙箱路径"
+                      onClick=${() => onSet(f)}><${IconPencil} /></button>
+              ${hasRoot ? html`
+                <button class="entity-row-action danger" title="清除沙箱"
+                        onClick=${() => onClear(f)}><${IconClose} /></button>` : null}
+            </span>
+          </div>`;
+      })}
     </div>`;
 }
 

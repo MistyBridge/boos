@@ -74,6 +74,10 @@ async function gracefulShutdown(reason) {
   try {
     await require('./lib/postgres').stopContainer();
   } catch {}
+  // 4. Stop archive periodic prune (Sprint 9).
+  try {
+    require('./lib/archive').stopPeriodicPrune();
+  } catch {}
   try {
     tunnel.stop();
   } catch {}
@@ -280,6 +284,9 @@ require('./routes/version').register(app, {
 // ---- decisions ----
 require('./routes/decisions').register(app, { asyncH });
 require('./routes/hr').register(app, { hrAgent: require('./lib/hrAgent') });
+require('./routes/archive').register(app, { asyncH });        // Sprint 9: archive system
+require('./routes/agents').register(app, { asyncH });        // Sprint 9: agent-bus ↔ canvas bridge
+require('./routes/knowledge').register(app, { asyncH });     // Sprint 10: shared knowledge base
 
 function listenWithFallback(preferred) {
   return new Promise((resolve, reject) => {
@@ -357,6 +364,29 @@ function listenWithFallback(preferred) {
     if (deduped > 0) {
       console.log(`[boos] dedup: soft-deleted ${deduped} ghost session(s) (no cliSessionId, sibling had one)`);
     }
+
+    // Sprint 9: auto-resume sessions whose PTYs survived the restart.
+    // Claude CLI processes are separate OS processes — they outlive the
+    // BOOS server restart. Find sessions whose persisted status was just
+    // marked 'exited' but have a live PTY, and restore 'running' status.
+    let revived = 0;
+    try {
+      const liveTermIds = new Set(
+        webTerminal.list().filter((t) => !t.exitedAt).map((t) => t.id),
+      );
+      for (const s of all) {
+        if (s.status === 'exited' && liveTermIds.has(s.id)) {
+          try {
+            const term = webTerminal.get(s.id);
+            await persistedSessions.markRunning(s.id, term ? term.pid : null);
+            revived++;
+          } catch {}
+        }
+      }
+    } catch {}
+    if (revived > 0) {
+      console.log(`[boos] auto-resume: ${revived} session(s) with surviving PTYs restored to running`);
+    }
   } catch (e) {
     console.error('[boos] could not reconcile persisted sessions:', e.message);
   }
@@ -389,6 +419,13 @@ function listenWithFallback(preferred) {
     } catch (e) {
       console.warn('[boos] agent-bus notifications failed to start:', e.message);
     }
+  }
+
+  // Sprint 9: archive system — periodic prune of expired items.
+  try {
+    require('./lib/archive').startPeriodicPrune();
+  } catch (e) {
+    console.warn('[boos] archive system failed to start:', e.message);
   }
 
   // Prewarm tunnel provider probe. First /api/tunnel/status round-trip

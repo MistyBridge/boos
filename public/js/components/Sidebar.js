@@ -1,13 +1,14 @@
 import { html } from '../html.js';
 import { signal } from '@preact/signals';
+import { useEffect, useState } from 'preact/hooks';
 import {
   activeTab, sidebarCollapsed, sidebarForcedCollapsed, isMobile, configDirty, capabilities, config,
   sessions, deletedSessions, folders, sessionsByFolder, foldersCollapsed, activeSessionId,
   selectTab, selectSession, toggleSidebar, toggleFolder, setSidebarWidth,
   closeOpenSessionTab, clearActiveSession, openWorkspaceForFolder, workspaceFolderId,
-  installPrompt, isInstalledPwa, sessionFilter,
+  installPrompt, isInstalledPwa, sessionFilter, pendingDecisionCount,
 } from '../state.js';
-import { createFolder, renameFolder, deleteFolder, reorderFolders, setSessionFolder, reorderSessions, deleteSession, restoreSession, resumeSession, setSessionTitle, refreshAll, importSessionById } from '../api.js';
+import { createFolder, renameFolder, deleteFolder, reorderFolders, setSessionFolder, reorderSessions, deleteSession, restoreSession, resumeSession, setSessionTitle, refreshAll, importSessionById, fetchDecisions } from '../api.js';
 import { isRemoteAccess } from '../backend.js';
 import { boosPrompt, boosConfirm } from '../dialog.js';
 import { setToast } from '../toast.js';
@@ -20,9 +21,10 @@ import { buildLaunchBodyFromState } from '../launchState.js';
 import {
   IconLaunch, IconConfigure, IconRemote, IconWorkspace,
   IconSidebarToggle, IconPencil, IconClose, IconFolder, IconFolderOpen, IconPlus,
-  IconTrash, IconRestore, IconTerminal, BrandMark, IconCanvas, IconDecisions,
+  IconTrash, IconRestore, IconTerminal, BrandMark, IconCanvas, IconDecisions, IconSettings,
 } from '../icons.js';
 import { SearchBar, matchesFilter } from './SearchBar.js';
+import { FolderSettingsModal } from '../pages/ConfigurePage.js';
 
 // Module-level drag state for session → folder moves. Lives outside the
 // useDragSort hook (which handles same-list folder reorder) so the two
@@ -34,14 +36,15 @@ const dragOverFolderKey = signal(null);
 const launchingFolderKey = signal(null);
 const folderKey = (folder) => folder ? folder.id : 'unsorted';
 
-function NavItem({ tab, icon, label, dirty, onClick }) {
+function NavItem({ tab, icon, label, dirty, badge, onClick }) {
   const selected = activeTab.value === tab;
   return html`
-    <button class=${`nav-item${dirty ? ' has-changes' : ''}${selected ? ' is-active' : ''}`}
+    <button class=${`nav-item${dirty ? ' has-changes' : ''}${selected ? ' is-active' : ''}${badge > 0 ? ' has-badge' : ''}`}
             role="tab" aria-selected=${selected ? 'true' : 'false'}
             onClick=${() => { if (onClick) onClick(); selectTab(tab); }}>
       <span class="nav-icon">${icon}</span>
       <span class="nav-label">${label}</span>
+      ${badge > 0 ? html`<span class="sidebar-badge">${badge > 99 ? '99+' : badge}</span>` : null}
     </button>`;
 }
 
@@ -220,7 +223,7 @@ function DeletedSessionsGroup() {
     </div>`;
 }
 
-function FolderGroup({ folder, sessionList, dndHandle, dndRow }) {
+function FolderGroup({ folder, sessionList, dndHandle, dndRow, onFolderSettings }) {
   // folder is now always set — backend materializes a synthetic
   // {id:'unsorted', name:'Unsorted', builtin:true} entry alongside the
   // user folders. The bucket can be drag-reordered like any other but
@@ -354,12 +357,25 @@ function FolderGroup({ folder, sessionList, dndHandle, dndRow }) {
         </span>
         <span class="tree-folder-name">${name}</span>
         <span class="tree-folder-actions">
-          <button class="tree-folder-action"
-                  title=${isLaunching ? T.sidebar.launching : T.sidebar.launchIn(name)}
-                  disabled=${isLaunching}
-                  onClick=${onLaunchInFolder}>
-            <${IconPlus} />
-          </button>
+          ${!isUnsorted ? html`
+            <button class="tree-folder-action"
+                    title=${isLaunching ? T.sidebar.launching : T.sidebar.launchIn(name)}
+                    disabled=${isLaunching}
+                    onClick=${onLaunchInFolder}>
+              <${IconPlus} />
+            </button>
+            <button class="tree-folder-action" title="文件夹设置"
+                    onClick=${(ev) => { ev.preventDefault(); ev.stopPropagation(); onFolderSettings?.(folder); }}>
+              <${IconSettings} />
+            </button>
+          ` : html`
+            <button class="tree-folder-action"
+                    title=${isLaunching ? T.sidebar.launching : T.sidebar.launchIn(name)}
+                    disabled=${isLaunching}
+                    onClick=${onLaunchInFolder}>
+              <${IconPlus} />
+            </button>
+          `}
           ${sessionList.length > 0 ? html`
             <button class="tree-folder-action"
                     title=${'在画布中打开 ' + name}
@@ -471,7 +487,8 @@ function SessionTree() {
         <${FolderGroup} key=${f.id} folder=${f}
                         sessionList=${filtered}
                         dndHandle=${dnd.handleProps(f.id)}
-                        dndRow=${dnd.rowProps(f.id)} />`;
+                        dndRow=${dnd.rowProps(f.id)}
+                        onFolderSettings=${(folder) => setSettingsFolder(folder)} />`;
       })}
       <${DeletedSessionsGroup} />
       <${ImportById} />
@@ -482,6 +499,20 @@ function SessionTree() {
 }
 
 export function Sidebar() {
+  // Poll decisions for pending count badge every 30s.
+  useEffect(() => {
+    fetchDecisions('open').catch(() => {});
+    const id = setInterval(() => fetchDecisions('open').catch(() => {}), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Folder settings modal state.
+  const [settingsFolder, setSettingsFolder] = useState(null);
+  // Agents in the currently settings-edited folder.
+  const settingsFolderAgents = settingsFolder
+    ? (sessions.value || []).filter((s) => !s.deletedAt && s.folderId === settingsFolder.id)
+    : [];
+
   // On phones the sidebar is rendered inside a full-screen drawer
   // (App applies .is-mobile + .drawer-open classes). It should always
   // appear in EXPANDED form there — full labels + sessions tree.
@@ -525,7 +556,8 @@ export function Sidebar() {
         <${NavItem} tab="launch"    icon=${html`<${IconLaunch} />`}    label=${T.sidebar.newSession} />
         <${NavItem} tab="workspace" icon=${html`<${IconWorkspace} />`} label="工作区"
                    onClick=${() => { workspaceFolderId.value = null; }} />
-        <${NavItem} tab="decisions" icon=${html`<${IconDecisions} />`} label=${T.decisions.title} />
+        <${NavItem} tab="decisions" icon=${html`<${IconDecisions} />`} label=${T.decisions.title}
+                   badge=${pendingDecisionCount.value} />
         ${!isRemoteAccess() ? html`
           <${NavItem} tab="remote"  icon=${html`<${IconRemote} />`}    label=${T.remote.title} />
         ` : null}
@@ -566,6 +598,12 @@ export function Sidebar() {
              title=${T.sidebar.dragToResize}
              onPointerDown=${onResizeStart}
              onDblClick=${() => setSidebarWidth(232)}></div>
+      ` : null}
+
+      ${settingsFolder ? html`
+        <${FolderSettingsModal} folder=${settingsFolder}
+          agents=${settingsFolderAgents.map((s) => ({ uid: s.id, name: s.title || s.id.slice(0, 12) }))}
+          onClose=${() => setSettingsFolder(null)} />
       ` : null}
     </aside>`;
 }
