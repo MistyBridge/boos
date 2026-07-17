@@ -5,16 +5,28 @@
 import { wsBase, getToken, getDeviceId, isRemoteAccess } from '../backend.js';
 import { TerminalResizeDebouncer } from './TerminalResizeDebouncer.js';
 import { XtermTerminal } from './XtermTerminal.js';
-import { workspaceAgentActivity } from '../state.js';
+import { workspaceAgentActivity, sessions } from '../state.js';
 
 const REMOTE_INPUT_FLUSH_MS = 12;
 
-// Forward agent_status WS frames to the workspace agent activity signal.
+// Forward agent_status WS frames to the workspace agent activity signal
+// AND the sessions list (so Sidebar dots reflect live activity).
 // Called from the onmessage handler inside TerminalInstance.
 function _handleAgentStatus(frame) {
   if (!frame || !frame.sessionId) return;
+  // Update workspace canvas view signal.
   const next = { ...workspaceAgentActivity.value, [frame.sessionId]: frame.activity };
   workspaceAgentActivity.value = next;
+  // Also update the session's activity field so Sidebar tree-dot shows
+  // correct is-working animation. Session list uses s.activity, not
+  // workspaceAgentActivity (the two are independent signals).
+  const list = sessions.value;
+  const idx = list.findIndex((s) => s.id === frame.sessionId);
+  if (idx >= 0 && list[idx].activity !== frame.activity) {
+    const updated = [...list];
+    updated[idx] = { ...updated[idx], activity: frame.activity };
+    sessions.value = updated;
+  }
 }
 
 export class TerminalInstance {
@@ -139,12 +151,18 @@ export class TerminalInstance {
       this.resizeDebouncer.flush();
       this.scheduleLayout({ immediate: true, retries: true, forceRedraw: false });
       // Tab switch → defer forceRedraw to a double-rAF so we hit a
-      // moment when WebGL rendering pipeline is idle (between frames),
-      // avoiding the tear that setTimeout(300) causes when AI output
-      // is streaming during the delay window.
+      // moment when WebGL rendering pipeline is idle (between frames).
+      // Debounce guard: cancel any previously scheduled forceRedraw to
+      // prevent race conditions with CSS transitions/grid reflows that
+      // would cause the WebGL canvas to tear.
       if (didChange) {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => this.xterm.forceRedraw());
+        if (this._forceRedrawRaf) cancelAnimationFrame(this._forceRedrawRaf);
+        if (this._forceRedrawRaf2) cancelAnimationFrame(this._forceRedrawRaf2);
+        this._forceRedrawRaf = requestAnimationFrame(() => {
+          this._forceRedrawRaf2 = requestAnimationFrame(() => {
+            this._forceRedrawRaf = this._forceRedrawRaf2 = null;
+            if (this.xterm && this.isVisible) this.xterm.forceRedraw();
+          });
         });
       }
       if (this.pendingThemeRefresh) {
@@ -255,13 +273,28 @@ export class TerminalInstance {
 
   _wireDomLifecycle() {
     const host = this.host;
+    let resizeRafPending = false;
+    let latestResizeEntry = null;
     const ro = new ResizeObserver((entries) => {
-      const box = entries[0]?.contentRect;
-      if (box) {
-        this.layout(box.width, box.height);
-      } else {
-        this.layout();
-      }
+      // Sprint 17 B2: rAF debounce — sidebar expand/collapse triggers a
+      // cascade of ResizeObserver → layout() → xterm.resize() which can
+      // fire a new resize event in the next micro-task, causing a loop.
+      // Coalesce into a single rAF per frame, using the latest dimensions.
+      latestResizeEntry = entries[0];
+      if (resizeRafPending) return;
+      resizeRafPending = true;
+      requestAnimationFrame(() => {
+        resizeRafPending = false;
+        if (this.closedByUs) return;
+        const entry = latestResizeEntry;
+        latestResizeEntry = null;
+        const box = entry?.contentRect;
+        if (box) {
+          this.layout(box.width, box.height);
+        } else {
+          this.layout();
+        }
+      });
     });
     ro.observe(host);
     this.disposables.push(() => ro.disconnect());

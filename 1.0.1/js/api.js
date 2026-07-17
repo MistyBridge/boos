@@ -516,6 +516,21 @@ export function subscribeAgentEvents(onActivity) {
   es.addEventListener('snapshot', (e) => {
     try { onActivity({ ...JSON.parse(e.data), type: 'snapshot' }); } catch {}
   });
+  // Sprint 17 A4: task lifecycle events from agent-bus SSE stream.
+  es.addEventListener('task_lifecycle', (e) => {
+    try {
+      const event = JSON.parse(e.data);
+      const list = S.tasks.value;
+      const idx = list.findIndex((t) => t.task_id === event.task_id);
+      if (idx >= 0) {
+        const updated = [...list];
+        updated[idx] = { ...updated[idx], ...event, updated_at: event.timestamp || Date.now() };
+        S.tasks.value = updated;
+      } else {
+        S.tasks.value = [event, ...list];
+      }
+    } catch {}
+  });
 
   es.onerror = () => {
     // EventSource auto-reconnects; no action needed.
@@ -532,9 +547,45 @@ export async function respondRootTask(taskId, result) {
   return api('POST', '/api/decisions/root-respond', { task_id: taskId, result });
 }
 
+/** Sprint 16: fetch all active root agent inbox tasks. */
+export async function fetchRootInbox() {
+  return api('GET', '/api/decisions/root-inbox');
+}
+
 /** Set agent permission levels for a folder. levels: { "uid": "PM"|"SE" } */
 export async function setFolderAgentLevels(folderId, levels) {
   const r = await api('PUT', `/api/folders/${encodeURIComponent(folderId)}/agent-levels`, { levels });
   await loadFolders();
   return r;
+}
+
+// ── Sprint 17 A4: Agent-Bus Task API ─────────────────────────────
+
+/**
+ * Fetch agent-bus tasks with optional filters.
+ * @param {{ uid?: string, status?: string, limit?: number, offset?: number }} opts
+ * @returns {Promise<{tasks:Array, total:number}>}
+ */
+export async function fetchTasks({ uid, status, limit = 50, offset = 0 } = {}) {
+  const params = new URLSearchParams();
+  if (uid) params.set('uid', uid);
+  if (status && status !== 'all') params.set('status', status);
+  params.set('limit', String(limit));
+  params.set('offset', String(offset));
+  const r = await api('GET', `/api/agent-bus/tasks?${params.toString()}`);
+  S.tasks.value = r.tasks || [];
+  return r;
+}
+
+/** Fetch a single task by id with full content. */
+export async function fetchTask(id) {
+  return api('GET', `/api/agent-bus/tasks/${encodeURIComponent(id)}`);
+}
+
+/**
+ * Polling-friendly wrapper — fetches tasks for the 5s refresh cycle.
+ * Swallows errors so a 404/missing endpoint doesn't break the data loop.
+ */
+export async function loadTasks() {
+  try { await fetchTasks(); } catch { /* endpoint may not exist yet */ }
 }

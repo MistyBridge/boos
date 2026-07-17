@@ -58,12 +58,17 @@ export const installPrompt    = signal(null);            // captured beforeinsta
 export const isInstalledPwa   = signal(false);           // running inside an installed PWA window
 export const sessionFilter    = signal('');              // search/filter string for sidebar session tree
 export const decisions        = signal([]);              // decision records from /api/decisions
+// Sprint 17 A4: agent-bus task stream for AgentTaskDashboard.
+export const tasks            = signal([]);              // task records from /api/agent-bus/tasks
+export const taskFilter       = signal({ status: 'all', sender: '', receiver: '' });
 
 // ── derived signals ───────────────────────────────────────────────
 export const pendingDecisionCount = computed(() => {
   const ds = decisions.value || [];
   return ds.filter((d) => d.status === 'open').length;
 });
+// Sprint 17 A4: total task count for the DecisionsPage "任务" tab badge.
+export const taskCount = computed(() => (tasks.value || []).length);
 
 // ── workspace view state ─────────────────────────────────────────
 export const workspaceAgentPositions = signal({});  // { uid: {x, y} } — persisted per workspace

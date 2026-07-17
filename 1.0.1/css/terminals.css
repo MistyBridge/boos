@@ -249,6 +249,9 @@
   margin: 0 calc(-1 * var(--s-4));
   background: var(--bg-elev);
   overflow: hidden;
+  /* P0 fix: contain layout + paint isolates the terminal pane from grid
+     reflows, preventing xterm WebGL canvas tearing during sidebar resize. */
+  contain: layout style paint;
 }
 
 /* Session tabs · sits between the page-title-bar and the session-pane.

@@ -188,15 +188,26 @@ export class XtermTerminal {
   }
 
   // Periodically clear the WebGL glyph texture atlas to prevent glyph
-  // corruption over long-running sessions. Also called from
-  // TerminalInstance on tab-switch with a 300ms delay.
+  // corruption over long-running sessions. Uses requestIdleCallback
+  // (or fallback setTimeout) to avoid competing with CSS transitions
+  // and user input — atlas rebuilds only during browser idle periods.
   startAtlasRefresh(intervalMs = 30000) {
     if (this._atlasTimer) return;
-    this._atlasTimer = setInterval(() => {
+    const tick = () => {
+      if (this._atlasDisposed) return;
       if (this.host?.isConnected) {
-        this.forceRedraw();
+        (typeof requestIdleCallback !== 'undefined'
+          ? requestIdleCallback
+          : (fn) => setTimeout(fn, 0))(() => this.forceRedraw());
       }
-    }, intervalMs);
+      this._atlasTimer = setTimeout(tick, intervalMs);
+    };
+    this._atlasTimer = setTimeout(tick, intervalMs);
+  }
+
+  stopAtlasRefresh() {
+    this._atlasDisposed = true;
+    if (this._atlasTimer) { clearTimeout(this._atlasTimer); this._atlasTimer = null; }
   }
 
   write(data, callback) {

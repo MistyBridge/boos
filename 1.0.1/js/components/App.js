@@ -1,5 +1,5 @@
 import { html } from '../html.js';
-import { activeTab, selectTab } from '../state.js';
+import { activeTab, selectTab, sessions, workspaceAgentActivity } from '../state.js';
 import { useEffect } from 'preact/hooks';
 import { isRemoteAccess } from '../backend.js';
 import { T } from '../i18n.js';
@@ -12,6 +12,7 @@ import { PendingApprovalOverlay } from './PendingApprovalOverlay.js';
 import { RestartOverlay } from './RestartOverlay.js';
 import { MobileNavFab } from './MobileNavFab.js';
 import { isMobile, mobileDrawerOpen } from '../state.js';
+import { subscribeAgentEvents } from '../api.js';
 import { SessionsPage } from '../pages/SessionsPage.js';
 import { WorkspacePage } from '../pages/WorkspacePage.js';
 import { LaunchPage } from '../pages/LaunchPage.js';
@@ -52,6 +53,62 @@ export function App() {
   const remoteLocked = tab === 'remote' && isRemoteAccess();
   const mobile = isMobile.value;
   const drawer = mobileDrawerOpen.value;
+
+  // ── Global SSE: bridge agent-bus activity notifications → Sidebar ──
+  // Must be mounted at App-level (not WorkspacePage) so Sidebar dots
+  // reflect agent activity regardless of which page the user is viewing.
+  //
+  // Sprint 17 B1 (P0): rAF batch merge — multiple SSE activity events
+  // within a single animation frame now accumulate into a pending map
+  // and flush once, instead of spreading the full sessions array on
+  // every event. Eliminates the primary source of UI flicker/tearing.
+  useEffect(() => {
+    let pendingActivity = null;
+    let rafScheduled = false;
+
+    const flush = () => {
+      if (!pendingActivity) return;
+      const entries = Object.entries(pendingActivity);
+      if (entries.length === 0) return;
+
+      // Batch-apply workspaceAgentActivity signal (one spread).
+      workspaceAgentActivity.value = {
+        ...workspaceAgentActivity.value,
+        ...pendingActivity,
+      };
+
+      // Batch-apply sessions signal (one spread for all sidebar dots).
+      const list = sessions.value;
+      let changed = false;
+      const updated = [...list];
+      for (const [sid, act] of entries) {
+        const idx = list.findIndex((s) => s.id === sid);
+        if (idx >= 0 && list[idx].activity !== act) {
+          updated[idx] = { ...updated[idx], activity: act };
+          changed = true;
+        }
+      }
+      if (changed) sessions.value = updated;
+
+      rafScheduled = false;
+      pendingActivity = null;
+    };
+
+    const unsub = subscribeAgentEvents((data) => {
+      if (!data.sessionId || data.type === 'snapshot' || data.type === 'registry') return;
+      const isBusy = data.activity === 'busy' || data.activity === 'woken';
+      const nextActivity = isBusy ? 'working' : 'idle';
+
+      if (!pendingActivity) pendingActivity = {};
+      pendingActivity[data.sessionId] = nextActivity;
+
+      if (!rafScheduled) {
+        rafScheduled = true;
+        requestAnimationFrame(flush);
+      }
+    });
+    return unsub;
+  }, []);
 
   return html`
     <div class=${`app${mobile ? ' is-mobile' : ''}${mobile && drawer ? ' drawer-open' : ''}`}>
