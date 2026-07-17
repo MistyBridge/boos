@@ -8,11 +8,15 @@ module.exports = defineConfig({
   globalSetup: require.resolve('./global-setup'),
   globalTeardown: require.resolve('./global-teardown'),
   use: {
-    baseURL: process.env.BOOS_E2E_URL || 'http://localhost:17777',
+    baseURL: process.env.BOOS_E2E_URL || 'http://localhost:7780',
     trace: 'off',
   },
-  // No browser projects — pure API tests
   projects: [
-    { name: 'api', testMatch: '*.spec.js' },
+    { name: 'api', testMatch: 'smoke*.spec.js' },
+    {
+      name: 'chromium',
+      use: { browserName: 'chromium', headless: true },
+      testMatch: 'rendering-perf.spec.js',
+    },
   ],
 });

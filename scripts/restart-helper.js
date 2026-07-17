@@ -15,7 +15,7 @@ const os = require('node:os');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
 
-const oldPort = Number(process.argv[2] || 7777);
+const oldPort = Number(process.argv[2] || 7780);
 const oldPid = Number(process.argv[3] || 0);
 
 const HOME = process.env.BOOS_HOME || path.join(os.homedir(), '.boos');

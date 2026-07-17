@@ -2,9 +2,9 @@
 // and "what auth token (if any) do we attach to every request".
 //
 //   localhost / 127.0.0.1            same-origin (page IS the backend)
-//   MistyBridge.github.io              http://localhost:7777 (the hosted
-//                                      frontend talks to the user's local
-//                                      backend via CORS)
+//   MistyBridge.github.io              dynamic port discovery (probes
+//                                      localhost via /api/runtime, falls
+//                                      back to DEFAULT_PORT)
 //   anything else (tunnel domain)    same-origin (the local backend is
 //                                      serving this frontend over the
 //                                      tunnel; API calls go to the same
@@ -15,6 +15,8 @@
 // `location.*` at call time (matters for tests / route changes).
 
 const HOSTED_HOST = 'MistyBridge.github.io';
+const DEFAULT_PORT = 7780;
+const PROBE_PORTS = [DEFAULT_PORT, 7777, 7781, 7782, 7783, 7784, 7785, 7786, 7787, 7788, 7789];
 
 function isLocal() {
   return location.hostname === 'localhost' || location.hostname === '127.0.0.1';
@@ -23,14 +25,62 @@ function isHosted() {
   return location.hostname === HOSTED_HOST;
 }
 
+// ── Dynamic port discovery (hosted mode only) ───────────────────────
+// In hosted mode the frontend is served from GitHub Pages but the
+// backend runs on the user's local machine. We probe localhost ports
+// via GET /api/runtime to discover the actual bound port (which may
+// differ from DEFAULT_PORT if 7780 was taken).
+
+let _runtimePort = null;
+let _probeStarted = false;
+
+async function _discoverPort() {
+  for (const port of PROBE_PORTS) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1500);
+      const r = await fetch(`http://localhost:${port}/api/runtime`, {
+        cache: 'no-store', signal: ctrl.signal,
+      });
+      clearTimeout(t);
+      if (r.ok) {
+        const j = await r.json();
+        if (j && j.port) {
+          _runtimePort = j.port;
+          try { sessionStorage.setItem('boos.runtimePort', String(j.port)); } catch {}
+          return;
+        }
+      }
+    } catch {}
+  }
+  _runtimePort = DEFAULT_PORT;
+}
+
+function _ensureProbe() {
+  if (_probeStarted) return;
+  // Check sessionStorage cache first (survives page reloads).
+  try {
+    const cached = sessionStorage.getItem('boos.runtimePort');
+    if (cached) { _runtimePort = Number(cached); _probeStarted = true; return; }
+  } catch {}
+  _probeStarted = true;
+  _discoverPort();
+}
+
 export function httpBase() {
-  if (isHosted()) return 'http://localhost:7777';
+  if (isHosted()) {
+    _ensureProbe();
+    return `http://localhost:${_runtimePort || DEFAULT_PORT}`;
+  }
   // Local OR tunnel-served — both same-origin.
   return '';
 }
 
 export function wsBase() {
-  if (isHosted()) return 'ws://localhost:7777';
+  if (isHosted()) {
+    _ensureProbe();
+    return `ws://localhost:${_runtimePort || DEFAULT_PORT}`;
+  }
   return `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
 }
 

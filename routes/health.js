@@ -27,6 +27,20 @@ function register(app, { asyncH, webTerminal, pkg, gracefulShutdown, openInBrows
     ok: true, pid: process.pid, version: pkg.version, name: pkg.name,
   }));
 
+  // ---- runtime discovery ----
+  // Public CORS — local dev tools (Claude Code, CI scripts) probe this to
+  // discover the actual port and MCP URL without hardcoding them.
+  app.get('/api/runtime', (_req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const s = getState();
+    res.json({
+      pid: process.pid,
+      port: s.currentPort,
+      version: pkg.version,
+      mcpUrl: `http://127.0.0.1:${s.currentPort}/mcp/sse`,
+    });
+  });
+
   // ---- heartbeat ----
   app.post('/api/heartbeat', (_req, res) => {
     const s = getState();

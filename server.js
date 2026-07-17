@@ -5,7 +5,7 @@ const path = require('node:path');
 const os = require('node:os');
 const express = require('express');
 
-const { loadConfig, saveConfig, DATA_DIR } = require('./lib/config');
+const { loadConfig, saveConfig, DATA_DIR, DEFAULT_PORT, setRuntimePort } = require('./lib/config');
 const { listWorkspaces, findOrCreateWorkspace, ensureReposInWorkspace, isInside } = require('./lib/workspace');
 const webTerminal = require('./lib/webTerminal');
 const persistedSessions = require('./lib/persistedSessions');
@@ -46,11 +46,28 @@ const openInBrowser = (url) => _openBrowserRaw(url, DATA_DIR);
 // One unified exit path: kill PTY children, then exit. v1.0 dropped the
 // snapshot-on-exit behaviour because the new persistedSessions store is
 // the source of truth (and is always on disk, not in memory).
+
+// ── Runtime port lock ────────────────────────────────────────────────
+// Written on startup so external tools (start.bat, Claude Code, CI
+// scripts) can discover the actual bound port + MCP URL. Deleted on
+// graceful shutdown.
+const PORT_LOCK_PATH = path.join(DATA_DIR, 'port.lock');
+
+function isPidDead(pid) {
+  if (!pid) return true;
+  try { process.kill(pid, 0); return false; }
+  catch (e) { return e.code === 'ESRCH'; }
+}
+
 let shuttingDown = false;
 async function gracefulShutdown(reason) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[boos] shutting down · ${reason}`);
+
+  // Delete port.lock so external tools know this instance is gone.
+  try { require('node:fs').unlinkSync(PORT_LOCK_PATH); } catch {}
+
   // 1. Send Ctrl+C to every PTY and wait for natural exit (up to 15s) so CLI
   //    processes can flush session state to disk. Order matters: kill FIRST,
   //    then mark exited — reversing this causes the CLI's onExit callback to
@@ -86,6 +103,16 @@ async function gracefulShutdown(reason) {
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+
+// Open CORS preflight for runtime discovery — dev tools from any origin
+// can probe GET /api/runtime. Must be registered BEFORE corsMiddleware
+// (which sets CORS only for MistyBridge.github.io and eats OPTIONS).
+app.options('/api/runtime', (_req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.sendStatus(204);
+});
 
 app.use(corsMiddleware);
 
@@ -309,6 +336,33 @@ function listenWithFallback(preferred) {
   const preferredPort = process.env.BOOS_PORT ? Number(process.env.BOOS_PORT) : cfg.port;
   const { server, port } = await listenWithFallback(preferredPort);
   lifecycleState.currentPort = port;
+  setRuntimePort(port);
+
+  // Write runtime port lock so external tools (start.bat, Claude Code)
+  // can discover the actual port + MCP URL without hardcoding.
+  try {
+    const lockPayload = {
+      pid: process.pid,
+      port: port,
+      mcpUrl: `http://127.0.0.1:${port}/mcp/sse`,
+      startedAt: new Date().toISOString(),
+    };
+    let shouldWrite = true;
+    try {
+      const existingRaw = require('node:fs').readFileSync(PORT_LOCK_PATH, 'utf-8');
+      const existing = JSON.parse(existingRaw);
+      if (existing.pid && !isPidDead(existing.pid)) {
+        console.warn(`[boos] port.lock held by live PID ${existing.pid} (port ${existing.port}) — not overwriting`);
+        shouldWrite = false;
+      }
+    } catch {}
+    if (shouldWrite) {
+      require('node:fs').writeFileSync(PORT_LOCK_PATH, JSON.stringify(lockPayload, null, 2), 'utf-8');
+      console.log(`[boos] port.lock written · pid=${process.pid} port=${port}`);
+    }
+  } catch (e) {
+    console.warn('[boos] failed to write port.lock:', e.message);
+  }
 
   // On boot, normalize legacy records and mark any persisted "running"
   // sessions as exited — they belong to a previous server process whose
@@ -413,6 +467,11 @@ function listenWithFallback(preferred) {
   // is now embedded. Disable with BOOS_NO_AGENT_BUS_WATCH=1.
   if (process.env.BOOS_NO_AGENT_BUS_WATCH !== '1') {
     try {
+      // Sprint 14: rebuild identity cards from persisted agents/sessions
+      // so sandbox folder-level PM/SE works immediately after restart.
+      const { bootstrapIdentities } = require('./lib/agentBus/store');
+      bootstrapIdentities().catch(e => console.warn('[boos] bootstrapIdentities failed:', e.message));
+
       require('./lib/agentBus/notifications').start('boos').catch(e => {
         console.warn('[boos] collaboration loop init failed:', e.message);
       });

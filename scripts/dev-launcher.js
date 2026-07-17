@@ -19,9 +19,9 @@ async function getPort() {
   try {
     const { loadConfig } = require('../lib/config');
     const cfg = await loadConfig();
-    return cfg.port || 7777;
+    return cfg.port || 7780;
   } catch {
-    return 7777;
+    return 7780;
   }
 }
 

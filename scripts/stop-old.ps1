@@ -1,7 +1,7 @@
 # stop-old.ps1 — graceful shutdown of existing BOOS instances
 # Called from start.bat. Scans known ports, sends /api/shutdown, waits for exit.
 
-$ports = @(7780, 7777, 7778, 7779, 7781, 7782, 7783, 7784, 7785, 7786)
+$ports = @(7780, 7777, 7781, 7782, 7783, 7784, 7785, 7786)
 
 foreach ($p in $ports) {
   try {

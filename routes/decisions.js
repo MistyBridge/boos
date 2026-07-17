@@ -30,6 +30,28 @@ function register(app, { asyncH }) {
     }),
   );
 
+  // Sprint 16: GET /api/decisions/root-inbox — fetch all active root tasks.
+  // MUST be registered before /api/decisions/:id so Express doesn't match
+  // "root-inbox" as an :id parameter.
+  app.get(
+    '/api/decisions/root-inbox',
+    asyncH(async (_req, res) => {
+      try {
+        const store = require('../lib/agentBus/store');
+        const ROOT_UID = store.ROOT_UID;
+        const db = JSON.parse(require('fs').readFileSync(store.DB_PATH, 'utf-8'));
+        const tasks = Object.values(db.tasks || {})
+          .filter((t) => t.receiver_uid === ROOT_UID &&
+            t.status !== 'completed' && t.status !== 'cancelled')
+          .sort((a, b) => b.created_at.localeCompare(a.created_at));
+        res.json({ ok: true, tasks });
+      } catch (e) {
+        res.json({ ok: true, tasks: [] });
+      }
+    }),
+  );
+
+
   // GET /api/decisions/:id — get full .md content
   app.get(
     '/api/decisions/:id',
@@ -109,6 +131,7 @@ function register(app, { asyncH }) {
       res.json({ ok: true, task_id });
     }),
   );
+
 }
 
 // ── Auto-respond to agent via agent-bus ────────────────────────────────

@@ -39,7 +39,7 @@ const http = require('node:http');
 const { spawn, spawnSync } = require('node:child_process');
 
 const target = process.argv[2] || 'latest';
-const oldPort = Number(process.argv[3] || 7777);
+const oldPort = Number(process.argv[3] || 7780);
 const oldPid = Number(process.argv[4] || 0);
 const installPrefix = process.argv[5] || '';
 const doRespawn = process.argv[6] !== '0';

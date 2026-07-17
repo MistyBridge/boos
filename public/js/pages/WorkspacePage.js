@@ -169,10 +169,21 @@ export function WorkspacePage() {
       // activity event: update status + pending count.
       if (data.sessionId) {
         const isBusy = data.activity === 'busy' || data.activity === 'woken';
+        const nextActivity = isBusy ? 'working' : 'idle';
+        // Update workspace canvas signal.
         workspaceAgentActivity.value = {
           ...workspaceAgentActivity.value,
-          [data.sessionId]: isBusy ? 'working' : 'idle',
+          [data.sessionId]: nextActivity,
         };
+        // ALSO update sessions signal so Sidebar tree-dot lights up.
+        // Sidebar reads s.activity, not workspaceAgentActivity.
+        const list = sessions.value;
+        const idx = list.findIndex((s) => s.id === data.sessionId);
+        if (idx >= 0 && list[idx].activity !== nextActivity) {
+          const updated = [...list];
+          updated[idx] = { ...updated[idx], activity: nextActivity };
+          sessions.value = updated;
+        }
         setPendingCounts((prev) => ({ ...prev, [data.sessionId]: data.pending || 0 }));
       }
     });

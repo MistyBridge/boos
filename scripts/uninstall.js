@@ -17,7 +17,7 @@ if (process.platform !== 'win32') process.exit(0);
 function shutdownIfRunning() {
   return new Promise((resolve) => {
     const req = http.request(
-      { hostname: 'localhost', port: 7777, path: '/api/shutdown', method: 'POST', timeout: 1500,
+      { hostname: 'localhost', port: 7780, path: '/api/shutdown', method: 'POST', timeout: 1500,
         headers: { 'Content-Type': 'application/json', 'Content-Length': 2 } },
       (res) => { res.resume(); res.on('end', resolve); },
     );

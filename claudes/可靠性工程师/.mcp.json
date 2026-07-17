@@ -3,8 +3,8 @@
     "filesystem": {
       "command": "node",
       "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/filesystem/dist/index.js",
-        "D:/AI IDE/CC_BOOS"
+        "D:\\AI IDE\\CC_BOOS\\claudes\\.mcp\\filesystem\\dist\\index.js",
+        "D:\\AI IDE\\CC_BOOS"
       ]
     },
     "playwright": {
@@ -35,8 +35,8 @@
       }
     },
     "agent-bus": {
-      "type": "sse",
-      "url": "http://127.0.0.1:7784/mcp/sse"
+      "command": "node",
+      "args": ["C:/Users/admin/.boos/mcp-proxy.js"]
     }
   }
 }

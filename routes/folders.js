@@ -60,6 +60,11 @@ function register(app, { asyncH, folders, persistedSessions }) {
 
   // Sprint 13.1/13.2: agent permission levels per folder.
   // Accepts legacy string "PM"|"SE" OR new object { sandbox: "PM"|"SE", write: boolean }.
+  app.get('/api/folders/:id/agent-levels', asyncH(async (req, res) => {
+    const folder = await folders.getAgentLevels(req.params.id);
+    res.json({ folderId: req.params.id, levels: folder });
+  }));
+
   app.put('/api/folders/:id/agent-levels', asyncH(async (req, res) => {
     const { levels } = req.body || {};
     if (levels && typeof levels !== 'object') {

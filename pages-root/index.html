@@ -187,7 +187,8 @@
 // watchdog re-spawns the server).
 // ───────────────────────────────────────────────────────────────────
 
-const HEALTH_URL = 'http://localhost:7777/api/health';
+const DEFAULT_PORT = 7780;
+	const PROBE_PORTS = [DEFAULT_PORT, 7777, 7781, 7782, 7783, 7784, 7785, 7786, 7787, 7788, 7789];
 const POLL_MS = 2000;
 
 const probeEl = document.getElementById('probe');
@@ -202,24 +203,24 @@ function showOffline(msg) {
 }
 
 async function probeOnce() {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 1800);
-    // targetAddressSpace marks this as an intentional public→loopback call so
-    // PNA-aware browsers send the preflight (backend answers it) instead of
-    // hard-blocking. Some engines reject the unknown option synchronously, so
-    // fall back to a plain fetch.
-    let r;
+  for (const port of PROBE_PORTS) {
     try {
-      r = await fetch(HEALTH_URL, { cache: 'no-store', signal: ctrl.signal, targetAddressSpace: 'loopback' });
-    } catch {
-      r = await fetch(HEALTH_URL, { cache: 'no-store', signal: ctrl.signal });
-    }
-    clearTimeout(t);
-    if (!r.ok) return null;
-    const j = await r.json();
-    return j && j.version ? String(j.version) : null;
-  } catch { return null; }
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1800);
+      const url = 'http://localhost:' + port + '/api/health';
+      let r;
+      try {
+        r = await fetch(url, { cache: 'no-store', signal: ctrl.signal, targetAddressSpace: 'loopback' });
+      } catch {
+        r = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
+      }
+      clearTimeout(t);
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (j && j.version) return String(j.version);
+    } catch {}
+  }
+  return null;
 }
 
 function goToVersion(version) {

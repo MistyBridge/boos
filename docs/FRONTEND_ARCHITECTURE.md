@@ -797,7 +797,7 @@ Session A 在浏览器 X 中活跃
 ### 🟢 P1: MCP 连接
 
 **现状**: `settings.local.json` 中 5 个 MCP server 配置了但未全部连接:
-- ✅ agent-bus (SSE, port 7778) — 已连接
+- ✅ agent-bus (SSE, port 7777) — 已连接
 - ❌ filesystem / playwright / fetch / sequential-thinking — MCP 工具不可用
 
 **可能原因**: MCP server 进程未启动 / 路径不存在 / node 模块缺失

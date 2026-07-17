@@ -5,10 +5,11 @@
 import { html } from '../html.js';
 import { useEffect, useState, useRef } from 'preact/hooks';
 import { decisions, config } from '../state.js';
-import { fetchDecisions, getDecisionContent, approveDecision, rejectDecision, replyDecision, respondRootTask } from '../api.js';
+import { fetchDecisions, getDecisionContent, approveDecision, rejectDecision, replyDecision, respondRootTask, fetchRootInbox } from '../api.js';
 import { setToast } from '../toast.js';
 import { boosPrompt } from '../dialog.js';
 import { PageTitleBar } from '../components/PageTitleBar.js';
+import { AgentTaskDashboard } from '../components/AgentTaskDashboard.js';
 import { T } from '../i18n.js';
 import { fmtAgo } from '../util.js';
 import { clockTick } from '../state.js';
@@ -224,8 +225,14 @@ function DecisionGroup({ group, isRead, onApprove, onReject, onReply, busy }) {
     </div>`;
 }
 
+const PAGE_TABS = [
+  { key: 'decisions', label: '决策' },
+  { key: 'tasks',     label: '任务' },
+];
+
 export function DecisionsPage() {
   clockTick.value; // subscribe for fmtAgo refresh
+  const [pageTab, setPageTab] = useState('decisions');
   const [filter, setFilter] = useState('open');
   const [busy, setBusy] = useState(false);
   const [readIds, setReadIds] = useState(() => loadReadIds());
@@ -235,6 +242,18 @@ export function DecisionsPage() {
   // ── Root Agent Inbox state ────────────────────────────────────────
   const [rootInbox, setRootInbox] = useState([]);
   const rootProcessedRef = useRef(new Set());
+
+  // Sprint 16: fetch existing root inbox tasks on init (backfill for missed SSE events).
+  async function _fetchRootInbox() {
+    try {
+      const r = await fetchRootInbox();
+      if (r && r.ok && Array.isArray(r.tasks)) {
+        setRootInbox(r.tasks.sort((a, b) =>
+          (b.created_at || '').localeCompare(a.created_at || '')));
+      }
+    } catch {}
+  }
+
   const merged = mergeDecisions(list);
 
   // Fetch on mount + filter change.
@@ -242,10 +261,16 @@ export function DecisionsPage() {
     fetchDecisions(filter).catch(() => {});
   }, [filter]);
 
+  // Sprint 16: fetch root inbox on mount (don't miss tasks that arrived before SSE connected).
+  useEffect(() => {
+    _fetchRootInbox();
+  }, []);
+
   // Poll every 10s when idle for auto-refresh.
   useEffect(() => {
     pollRef.current = setInterval(() => {
       fetchDecisions(filter).catch(() => {});
+      _fetchRootInbox(); // also refresh root inbox
     }, 10000);
     return () => clearInterval(pollRef.current);
   }, [filter]);
@@ -348,6 +373,19 @@ export function DecisionsPage() {
 
   return html`
     <${PageTitleBar} title=${T.decisions.title} />
+    <!-- Sprint 17 A6: Tab switcher — "决策" / "任务" -->
+    <div class="decisions-filter" style="margin-bottom:0;">
+      ${PAGE_TABS.map((t) => html`
+        <button key=${t.key}
+                class=${`decision-filter-tab${pageTab === t.key ? ' is-active' : ''}`}
+                onClick=${() => setPageTab(t.key)}>
+          ${t.label}
+        </button>
+      `)}
+    </div>
+    ${pageTab === 'tasks' ? html`
+      <${AgentTaskDashboard} />
+    ` : html`
     <div class="decisions-page">
       <div class="decisions-filter">
         ${FILTER_TABS.map((t) => html`
@@ -394,5 +432,6 @@ export function DecisionsPage() {
             onApprove=${onApprove} onReject=${onReject} onReply=${onReply} busy=${busy} />`;
         })}
       </div>
-    </div>`;
+    </div>
+    `}
 }

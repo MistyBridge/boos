@@ -33,9 +33,9 @@ const LOG  = path.join(HOME, 'server.log');
 function loadPreferredPort() {
   try {
     const cfg = JSON.parse(fs.readFileSync(path.join(HOME, 'config.json'), 'utf8'));
-    return Number(cfg.port) || 7777;
+    return Number(cfg.port) || 7780;
   } catch {
-    return 7777;
+    return 7780;
   }
 }
 
@@ -119,7 +119,7 @@ function isSameVersion(running) {
   // ~/.boos/.upgrade.lock at start. If a boos:// click (or any other
   // launcher trigger) races during an in-flight install, spawning a
   // new server would: (a) fight npm for the package dir, EBUSY; or
-  // (b) bind port 7777 before the helper's own respawn does. Either
+  // (b) bind port 7780 before the helper's own respawn does. Either
   // way the upgrade derails. Bail out instead — the helper's UI on
   // 7779 is already showing the user what's happening.
   //

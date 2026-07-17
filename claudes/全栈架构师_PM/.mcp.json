@@ -29,8 +29,8 @@
       }
     },
     "agent-bus": {
-      "type": "sse",
-      "url": "http://127.0.0.1:7784/mcp/sse"
+      "command": "node",
+      "args": ["C:/Users/admin/.boos/mcp-proxy.js"]
     }
   }
 }

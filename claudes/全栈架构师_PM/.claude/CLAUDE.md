@@ -115,19 +115,42 @@ Workspace: `boos` | 注册方式: `register_agent(name="全栈架构师", worksp
 
 ---
 
-## 当前 Backlog (Sprint 6 收尾)
+## Sprint 16 完成情况 (2026-07-16)
 
-| # | 任务 | 负责人 | 状态 |
-|---|------|--------|:--:|
-| #82 | agent-bus 负载测试 (50 burst) | 可靠性工程师 | 🔄 |
-| — | `package.json` os → 三平台 | 平台集成 | ⬜ |
-| — | `handlers.js` TOCTOU 竞态 | 平台集成 | ⬜ |
-| — | `notifications.js` 私有 API 重构 | 平台集成 | ⬜ |
-| — | SSE 连接数上限 MAX=50 | 待分配 | ⬜ |
-| — | `/message` per-session 速率限制 | 待分配 | ⬜ |
-| — | `queue.js:178` 死代码清理 | 待分配 | ⬜ |
-| — | `store.js:246` 截断警告 | 待分配 | ⬜ |
-| — | 外部 agent-bus (7778) 下线确认 | PM | ⬜ |
+### ✅ 已完成
+
+| 任务 | 文件 | 状态 |
+|------|------|:--:|
+| P0: PTY 泄漏修复 (5 处) | `notifications.js` | ✅ |
+| P2-1: SSE MAX env var | `transport.js` | ✅ |
+| P2-2: 速率限制 env var | `transport.js` | ✅ |
+| P2-3: Session TTL env var | `transport.js` | ✅ |
+| P1-1: cancelTaskAtomic + interruptTaskAtomic | `store.js` | ✅ |
+| P1-1: queue cancel/interrupt → async atomic | `queue.js` | ✅ |
+| P1-1: handlers await for async ops | `handlers.js` | ✅ |
+| P1-2: _syncLoad JSDoc @deprecated | `store.js` | ✅ |
+| P3: 7778 refs 清理 | `stop-old.ps1`, `docs/` | ✅ |
+| P3: 删除 test-agentbus-watcher.js | — | ✅ |
+| P4: package.json os → `["win32"]` | `package.json` | ✅ |
+| 测试回归 | `npm test` | ✅ 292 pass |
+
+### ⚠️ 阻塞 (Agent PTY Cutover 后未响应)
+
+| 任务 | 负责人 | 状态 |
+|------|--------|:--:|
+| P1: _syncLoad 调用方迁移 | 平台集成 | 🔒 blocked |
+| P1: handlers.js TOCTOU 文档 | 平台集成 | 🔒 blocked |
+| P2-4: sandbox.js ID 冗余 | 平台集成 | 🔒 blocked |
+| P2-5: _onTaskInterrupted 导出 | PM | ✅ 已确认 (handlers.js 使用) |
+| P3: 回归测试 + 安全审计 | 可靠性 | 🔒 blocked |
+| #82: agent-bus 负载测试 | 可靠性 | 🔄 stale |
+
+### 关键架构变更 (Sprint 16)
+
+- **Agent 通讯通道**: PTY → SSE transport 切换
+- **Agent 指令**: 必须用 `check_inbox(wait=true)` 收取任务
+- **降级通道**: 超时/招募系统通知仍走 PTY (低频率可接受)
+- 详见 `blockers.md` 中的阻塞点分析
 
 ---
 

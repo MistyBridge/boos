@@ -18,6 +18,8 @@ function register(app, { asyncH }) {
   app.get('/api/agents', asyncH(async (_req, res) => {
     let store;
     try { store = require('../lib/agentBus/store'); } catch { store = null; }
+    let resolver;
+    try { resolver = require('../lib/identityResolver').getResolver(); } catch { resolver = null; }
 
     const sessions = await persistedSessions.loadAll();
     const live = sessions.filter((s) => !s.deletedAt);
@@ -27,9 +29,15 @@ function register(app, { asyncH }) {
     const agentList = [];
     if (store) {
       const allAgents = store.listAllAgents();
-      // Map agent UID → session ID via store.getSessionByAgentUid (reverse).
       for (const a of allAgents) {
-        const sid = store.getSessionByAgentUid(a.uid);
+        // Use IdentityResolver to get canonical BOOS session ID.
+        // Falls back to transport session ID if resolver unavailable.
+        let boosSid = null;
+        try {
+          boosSid = resolver ? resolver.canonical(a.uid) : null;
+        } catch {}
+        const transportSid = store.getSessionByAgentUid(a.uid);
+        const sid = boosSid || transportSid;
         const session = sid ? live.find((s) => s.id === sid) : null;
         agentList.push({
           uid: a.uid,
