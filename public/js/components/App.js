@@ -1,5 +1,5 @@
 import { html } from '../html.js';
-import { activeTab, selectTab, sessions, workspaceAgentActivity } from '../state.js';
+import { activeTab, selectTab, sessions, workspaceAgentActivity, pendingDirty } from '../state.js';
 import { useEffect } from 'preact/hooks';
 import { isRemoteAccess } from '../backend.js';
 import { T } from '../i18n.js';
@@ -58,15 +58,17 @@ export function App() {
   // Must be mounted at App-level (not WorkspacePage) so Sidebar dots
   // reflect agent activity regardless of which page the user is viewing.
   //
-  // Sprint 17 B1 (P0): rAF batch merge — multiple SSE activity events
-  // within a single animation frame now accumulate into a pending map
-  // and flush once, instead of spreading the full sessions array on
-  // every event. Eliminates the primary source of UI flicker/tearing.
+  // Sprint 17 B1 (P0): 50ms debounce + rAF batch merge.
+  // Multiple SSE activity events accumulate for 50ms, then flush
+  // inside a single requestAnimationFrame — one render per frame max.
+  // pendingDirty flag signals downstream that a flush is imminent.
   useEffect(() => {
     let pendingActivity = null;
-    let rafScheduled = false;
+    let debounceTimer = null;
+    let rafHandle = null;
 
     const flush = () => {
+      rafHandle = null;
       if (!pendingActivity) return;
       const entries = Object.entries(pendingActivity);
       if (entries.length === 0) return;
@@ -90,8 +92,14 @@ export function App() {
       }
       if (changed) sessions.value = updated;
 
-      rafScheduled = false;
       pendingActivity = null;
+      pendingDirty.value = false;
+    };
+
+    const scheduleFlush = () => {
+      if (rafHandle === null) {
+        rafHandle = requestAnimationFrame(flush);
+      }
     };
 
     const unsub = subscribeAgentEvents((data) => {
@@ -101,13 +109,20 @@ export function App() {
 
       if (!pendingActivity) pendingActivity = {};
       pendingActivity[data.sessionId] = nextActivity;
+      pendingDirty.value = true;
 
-      if (!rafScheduled) {
-        rafScheduled = true;
-        requestAnimationFrame(flush);
-      }
+      // 50ms debounce: reset timer on each event; flush after quiet period.
+      if (debounceTimer !== null) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        scheduleFlush();
+      }, 50);
     });
-    return unsub;
+    return () => {
+      unsub();
+      if (debounceTimer !== null) clearTimeout(debounceTimer);
+      if (rafHandle !== null) cancelAnimationFrame(rafHandle);
+    };
   }, []);
 
   return html`

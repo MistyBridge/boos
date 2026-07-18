@@ -2,7 +2,9 @@
   "name": "@mistybridge/boos",
   "version": "1.0.1",
   "description": "Claude Code Session Manager — Windows web UI to manage many concurrent claude sessions: live list, snapshot/restore, focus existing window, new session in an isolated workspace with repo clones",
-  "os": ["win32"],
+  "os": [
+    "win32"
+  ],
   "license": "MIT",
   "main": "server.js",
   "bin": {
@@ -33,6 +35,8 @@
     "preuninstall": "node scripts/uninstall.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/server-memory": "^2026.7.4",
+    "@modelcontextprotocol/server-sequential-thinking": "^2026.7.4",
     "express": "^4.21.2",
     "pg": "^8.22.0"
   },

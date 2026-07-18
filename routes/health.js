@@ -60,6 +60,10 @@ function register(app, { asyncH, webTerminal, pkg, gracefulShutdown, openInBrows
   }));
 
   // ---- shutdown ----
+  // Accepts: BOOS_NO_BROWSER=1 (headless) and BOOS_KEEP_ALIVE=1 (automation)
+  // mode servers. In headless mode the heartbeat watchdog skips Path-1/P-2
+  // shutdown when MCP SSE clients are connected, so /api/shutdown is the
+  // primary clean-exit path for those deployments.
   app.post('/api/shutdown', (_req, res) => {
     res.json({ ok: true, bye: 'shutting down' });
     setImmediate(() => gracefulShutdown('/api/shutdown'));

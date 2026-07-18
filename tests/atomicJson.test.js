@@ -132,13 +132,33 @@ describe('withFileLock', () => {
     assert.ok(elapsed < 180, 'expected <180ms, got ' + elapsed);
   });
 
-  // #51: withFileLock timeout
-  test('withFileLock timeout rejects after timeoutMs', async () => {
-    const filePath = path.join(tmpBase, 'timeout.json');
+  // Sprint 18: timeout starts when fn() begins executing, not when
+  // withFileLock is called.  Queue-wait time is unbounded — only the
+  // actual fn() wall-clock time counts against the deadline.
+  test('withFileLock timeout rejects when fn itself exceeds timeoutMs', async () => {
+    const filePath = path.join(tmpBase, 'timeout-fn.json');
     await atomicWriteJson(filePath, { v: 0 });
-    const holdLock = withFileLock(filePath, async () => { await new Promise((r) => setTimeout(r, 2000)); });
-    await new Promise((r) => setTimeout(r, 80));
-    await assert.rejects(() => withFileLock(filePath, async () => {}, 200), /timeout after 200ms/);
+    // fn takes 300ms > 100ms timeout → must reject.
+    await assert.rejects(
+      () => withFileLock(filePath, async () => {
+        await new Promise((r) => setTimeout(r, 300));
+      }, 100),
+      /timeout after 100ms/,
+    );
+  });
+
+  test('withFileLock timeout does NOT count queue-wait time', async () => {
+    const filePath = path.join(tmpBase, 'timeout-queue.json');
+    await atomicWriteJson(filePath, { v: 0 });
+    // Hold the lock for 800ms.
+    const holdLock = withFileLock(filePath, async () => {
+      await new Promise((r) => setTimeout(r, 800));
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    // Second caller has a 200ms timeout but fn is instant.
+    // Queue-wait (750ms) must NOT count against the 200ms budget.
+    const second = await withFileLock(filePath, async () => 'queued-but-ok', 200);
+    assert.equal(second, 'queued-but-ok');
     await holdLock;
   });
 

@@ -7,6 +7,7 @@ import {
   selectTab, selectSession, toggleSidebar, toggleFolder, setSidebarWidth,
   closeOpenSessionTab, clearActiveSession, openWorkspaceForFolder, workspaceFolderId,
   installPrompt, isInstalledPwa, sessionFilter, pendingDecisionCount,
+  hrAgentSession,
 } from '../state.js';
 import { createFolder, renameFolder, deleteFolder, reorderFolders, setSessionFolder, reorderSessions, deleteSession, restoreSession, resumeSession, setSessionTitle, refreshAll, importSessionById, fetchDecisions } from '../api.js';
 import { isRemoteAccess } from '../backend.js';
@@ -480,6 +481,32 @@ function SessionTree({ onFolderSettings }) {
           <${IconPlus} />
         </button>
       </div>
+      ${(() => {
+        const hr = hrAgentSession.value;
+        if (!hr) return null;
+        clockTick.value; // subscribe for fmtAgo refresh
+        const isActive = activeSessionId.value === hr.id;
+        const running = hr.status === 'running';
+        const onClick = async (ev) => {
+          ev.preventDefault();
+          selectSession(hr.id);
+          if (!running && !hr.manualStopped) {
+            try { await resumeSession(hr.id); }
+            catch (e) { setToast(e.message, 'error'); }
+          }
+        };
+        return html`
+          <div class="tree-hr-agent">
+            <div class=${`tree-session tree-session-hr${isActive ? ' is-active' : ''}${running ? ' is-running' : ' is-stopped'}${running && hr.activity === 'working' ? ' is-working' : ''}`}
+                 onClick=${onClick}
+                 title=${`HR Agent\n${hr.cwd}\n${running ? (hr.activity === 'working' ? 'working' : 'idle') : 'stopped'} · ${hr.cliId}`}>
+              <span class=${`tree-dot ${running ? 'is-running' : 'is-stopped'}${running && hr.activity === 'working' ? ' is-working' : ''}`}></span>
+              <span class="tree-label">HR Agent</span>
+              <span class="tree-meta">${running ? (hr.activity === 'working' ? 'working' : 'idle') : 'stopped'}</span>
+            </div>
+            <div class="tree-hr-separator"></div>
+          </div>`;
+      })()}
       ${orderedFolders.map((f) => {
         const raw = grouped.get(f.id) || [];
         const filtered = filter ? raw.filter((s) => matchesFilter(s, filter)) : raw;

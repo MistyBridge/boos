@@ -61,6 +61,12 @@ export const decisions        = signal([]);              // decision records fro
 // Sprint 17 A4: agent-bus task stream for AgentTaskDashboard.
 export const tasks            = signal([]);              // task records from /api/agent-bus/tasks
 export const taskFilter       = signal({ status: 'all', sender: '', receiver: '' });
+// Sprint 17 A6: supervisor-only feature gate. Set from /api/capabilities.
+export const isSupervisor     = signal(false);
+// Sprint 17 B1: dirty flag — set by SSE batch accumulator, cleared on flush.
+// Components can read this to show a "syncing" indicator; the rAF+debounce
+// flush resets it immediately after applying updates.
+export const pendingDirty      = signal(false);
 
 // ── derived signals ───────────────────────────────────────────────
 export const pendingDecisionCount = computed(() => {
@@ -69,6 +75,17 @@ export const pendingDecisionCount = computed(() => {
 });
 // Sprint 17 A4: total task count for the DecisionsPage "任务" tab badge.
 export const taskCount = computed(() => (tasks.value || []).length);
+
+// Sprint 18: HR Agent session — detected by workspace='HR Agent' or cwd ending with /HR.
+// It appears as a standalone entry in the sidebar, outside any folder.
+export const HR_AGENT_KEYWORDS = ['HR Agent', 'HR'];
+export const hrAgentSession = computed(() => {
+  return sessions.value.find((s) =>
+    s.workspace === 'HR Agent' ||
+    s.workspace === 'HR' ||
+    (s.cwd && s.cwd.replace(/\\/g, '/').endsWith('/HR'))
+  ) || null;
+});
 
 // ── workspace view state ─────────────────────────────────────────
 export const workspaceAgentPositions = signal({});  // { uid: {x, y} } — persisted per workspace
@@ -96,6 +113,8 @@ export const sessionsByFolder = computed(() => {
   groups.set(UNSORTED_KEY, []);
   for (const f of folders.value) groups.set(f.id, []);
   for (const s of sessions.value) {
+    // Sprint 18: HR Agent is rendered standalone, not inside any folder.
+    if (s.workspace === 'HR Agent' || s.workspace === 'HR' || (s.cwd && s.cwd.replace(/\\/g, '/').endsWith('/HR'))) continue;
     const key = s.folderId || UNSORTED_KEY;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(s);

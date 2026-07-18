@@ -147,7 +147,7 @@ function register(app, deps) {
           cliId: cli.id, cwd: launchCwd, workspace: workspace.name,
           repos: wantedRepos.map((r) => r.name),
           folderId: (req.body && req.body.folderId) || null,
-          title: '',
+          title: (req.body && req.body.title) || workspace.name,
         });
 
         let inheritedCliSessionId = null;
@@ -418,6 +418,39 @@ function register(app, deps) {
       folderId: fid, title: title || '', repos: [], status: 'exited', cliSessionId,
     });
     res.json({ session: record, alreadyAdopted: false });
+  }));
+
+  // ---- Sprint 17 C2: batch resume all eligible sessions ----
+  app.post('/api/sessions/resume-all', asyncH(async (req, res) => {
+    const all = await persistedSessions.loadAll();
+    const cfg = await loadConfig();
+
+    let resumed = 0;
+    let skipped = 0;
+    let failed = 0;
+    const results = [];
+
+    for (const record of all) {
+      // Skip manually stopped sessions.
+      if (record.manualStopped) { skipped++; continue; }
+      // Skip already-running sessions with live PTY.
+      const live = webTerminal.get(record.id);
+      if (live && !live.exitedAt) { skipped++; continue; }
+
+      const cli = findCliById(cfg, record.cliId);
+      if (!cli) { skipped++; continue; }
+
+      try {
+        const launched = await spawnSessionRecord({ record, cli, cfg, body: req.body, resume: true });
+        resumed++;
+        results.push({ id: record.id, status: 'resumed', pid: launched?.pid });
+      } catch (e) {
+        failed++;
+        results.push({ id: record.id, status: 'failed', error: e.message });
+      }
+    }
+
+    res.json({ resumed, skipped, failed, total: all.length, results });
   }));
 }
 

@@ -1,0 +1,3 @@
+{
+  "enabledMcpjsonServers": ["agent-bus", "filesystem", "sequential-thinking", "memory"]
+}

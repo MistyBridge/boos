@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "agent-bus": {
+      "type": "sse",
+      "url": "http://127.0.0.1:7780/mcp/sse"
+    },
+    "filesystem": {
+      "command": "node",
+      "args": [
+        "D:\\AI IDE\\CC_BOOS\\claudes\\.mcp\\filesystem\\dist\\index.js",
+        "D:\\AI IDE\\CC_BOOS"
+      ]
+    },
+    "sequential-thinking": {
+      "command": "node",
+      "args": [
+        "D:\\AI IDE\\CC_BOOS\\node_modules\\@modelcontextprotocol\\server-sequential-thinking\\dist\\index.js"
+      ]
+    },
+    "memory": {
+      "command": "node",
+      "args": [
+        "D:\\AI IDE\\CC_BOOS\\node_modules\\@modelcontextprotocol\\server-memory\\dist\\index.js"
+      ]
+    }
+  }
+}

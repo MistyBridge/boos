@@ -1,0 +1,32 @@
+{
+  "_template": true,
+  "_description": "入职任务日志模板 — HR Agent 在每次 recruitment 任务执行时，按阶段填充此结构并写入 HR/logs/task-<task_id>.json",
+  "task_id": "",
+  "type": "recruitment",
+  "pm_uid": "",
+  "pm_name": "",
+  "received_at": "",
+  "started_at": "",
+  "completed_at": "",
+  "phases": [
+    { "name": "role_analysis", "duration_ms": 0, "status": "pending", "result": null },
+    { "name": "skill_matching", "duration_ms": 0, "status": "pending", "result": null },
+    { "name": "file_generation", "duration_ms": 0, "status": "pending", "result": null },
+    { "name": "agent_registration", "duration_ms": 0, "status": "pending", "result": null },
+    { "name": "session_launch", "duration_ms": 0, "status": "pending", "result": null },
+    { "name": "validation", "duration_ms": 0, "status": "pending", "result": null }
+  ],
+  "review_rounds": 0,
+  "total_duration_ms": 0,
+  "errors": [],
+  "onboarding_report": {
+    "agent_uid": "",
+    "agent_name": "",
+    "session_id": "",
+    "cwd": "",
+    "skills_assigned": [],
+    "mcps_assigned": [],
+    "capabilities": [],
+    "project": ""
+  }
+}

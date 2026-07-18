@@ -134,7 +134,11 @@
      events firing (forcing pre-wrap / break-all eats compositionupdate events
      in Chromium and Chinese input stops working entirely). */
   overflow: hidden;
-  contain: layout;
+  /* Sprint 17 B3: tighten containment on the WebGL terminal host surface.
+     layout + style + paint isolate the xterm canvas from sibling reflows
+     without sizing constraints (strict would break the flex child). */
+  contain: layout style paint;
+  will-change: auto;
 }
 /* IME composition box. While you're typing pinyin — before committing the
    Chinese characters — xterm writes the in-progress string into

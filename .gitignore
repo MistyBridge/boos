@@ -19,3 +19,9 @@ claudes/.mcp/playwright/
 .boos-data/
 coverage/
 test-session.json
+
+# HR Agent asset library — large external skill repos, not source code
+HR/assets/skills/
+HR/assets/mcps/
+HR/logs/*.jsonl
+
