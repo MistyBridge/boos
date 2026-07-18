@@ -4,7 +4,7 @@
 
 import { html } from '../html.js';
 import { useEffect, useState, useRef } from 'preact/hooks';
-import { decisions, config } from '../state.js';
+import { decisions, config, isSupervisor } from '../state.js';
 import { fetchDecisions, getDecisionContent, approveDecision, rejectDecision, replyDecision, respondRootTask, fetchRootInbox } from '../api.js';
 import { setToast } from '../toast.js';
 import { boosPrompt } from '../dialog.js';
@@ -373,9 +373,9 @@ export function DecisionsPage() {
 
   return html`
     <${PageTitleBar} title=${T.decisions.title} />
-    <!-- Sprint 17 A6: Tab switcher — "决策" / "任务" -->
+    <!-- Sprint 17 A6: Tab switcher — "决策" / "任务" (tasks tab: supervisor only) -->
     <div class="decisions-filter" style="margin-bottom:0;">
-      ${PAGE_TABS.map((t) => html`
+      ${PAGE_TABS.filter((t) => t.key !== 'tasks' || isSupervisor.value).map((t) => html`
         <button key=${t.key}
                 class=${`decision-filter-tab${pageTab === t.key ? ' is-active' : ''}`}
                 onClick=${() => setPageTab(t.key)}>

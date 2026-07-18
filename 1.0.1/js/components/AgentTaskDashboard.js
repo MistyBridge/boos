@@ -1,5 +1,5 @@
 // Sprint 17 A5: Agent-to-agent task timeline dashboard.
-// Signal-driven, filterable, expandable — embedded in DecisionsPage.
+// Table view with color-coded status labels, expandable rows.
 
 import { html } from '../html.js';
 import { useSignal, useEffect } from 'preact/hooks';
@@ -14,12 +14,26 @@ const STATUS_LABELS = {
   cancelled: '已取消',
 };
 
+const STATUS_CLASS = {
+  pending: 'task-status-pending',
+  in_progress: 'task-status-active',
+  completed: 'task-status-done',
+  cancelled: 'task-status-cancel',
+};
+
 const STATUS_TABS = ['all', 'pending', 'in_progress', 'completed', 'cancelled'];
 
-function TaskCard({ task }) {
+const PRIORITY_LABEL = { high: '高', normal: '中', low: '低' };
+
+function truncateId(id) {
+  if (!id) return '?';
+  return id.length > 12 ? id.slice(0, 12) + '…' : id;
+}
+
+function TaskRow({ task }) {
   const expanded = useSignal(false);
-  const loading = useSignal(false);
   const detail = useSignal(null);
+  const loading = useSignal(false);
   const loadError = useSignal('');
 
   const toggle = async () => {
@@ -39,43 +53,35 @@ function TaskCard({ task }) {
     }
   };
 
-  const badgeClass = task.status === 'completed' ? 'approved'
-    : task.status === 'cancelled' ? 'rejected' : '';
-  const isUrgent = task.priority === 'high';
+  const scls = STATUS_CLASS[task.status] || '';
 
   return html`
-    <div class="decision-card ${isUrgent ? 'is-urgent' : ''}">
-      <div class="decision-card-head" onClick=${toggle}>
-        <div class="decision-card-info">
-          <div class="decision-card-title-row">
-            <span class="decision-badge ${badgeClass}">${STATUS_LABELS[task.status] || task.status}</span>
-            <span class="decision-card-title">${(task.content || '').slice(0, 80) || '(无内容)'}</span>
-          </div>
-          <div class="decision-card-meta">
-            <span class="mono">${task.sender?.name || (task.sender?.uid || '').slice(0, 12) || '?'}</span>
-            <span>→</span>
-            <span class="mono">${task.receiver?.name || (task.receiver_uid || '').slice(0, 12) || '?'}</span>
-            <span class="muted">· ${task.created_at ? new Date(task.created_at).toLocaleString() : ''}</span>
-          </div>
-        </div>
-        <span class="decision-card-chevron">${expanded.value ? IconChevronDown : IconChevronRight}</span>
+    <div class="task-table-row-wrapper">
+      <div class="task-table-row ${scls}" onClick=${toggle}>
+        <span class="task-cell task-cell-id mono">${truncateId(task.task_id)}</span>
+        <span class="task-cell task-cell-from">${task.sender?.name || (task.sender?.uid || '?').slice(0, 14)}</span>
+        <span class="task-cell task-cell-to">${task.receiver?.name || (task.receiver_uid || '?').slice(0, 14)}</span>
+        <span class="task-cell task-cell-status">
+          <span class="task-status-chip ${scls}">${STATUS_LABELS[task.status] || task.status}</span>
+        </span>
+        <span class="task-cell task-cell-priority">${PRIORITY_LABEL[task.priority] || task.priority || '-'}</span>
+        <span class="task-cell task-cell-time mono">${task.created_at ? new Date(task.created_at).toLocaleString() : ''}</span>
+        <span class="task-cell task-cell-chevron">${expanded.value ? IconChevronDown : IconChevronRight}</span>
       </div>
       ${expanded.value ? html`
-        <div class="decision-card-body">
+        <div class="task-row-detail">
           ${loading.value ? html`<p class="decision-loading">加载中…</p>` : null}
           ${loadError.value ? html`<p class="decision-error">${loadError.value}</p>` : null}
           ${detail.value ? html`
-            <div>
-              <pre class="decision-content">${detail.value.content || '(无内容)'}</pre>
-              ${detail.value.result ? html`
-                <div style="margin-top:var(--s-3)">
-                  <strong style="font-size:12px;color:var(--ink-mid)">结果:</strong>
-                  <pre class="decision-content">${typeof detail.value.result === 'string'
-                    ? detail.value.result
-                    : JSON.stringify(detail.value.result, null, 2)}</pre>
-                </div>
-              ` : null}
-            </div>
+            <pre class="decision-content">${detail.value.content || '(无内容)'}</pre>
+            ${detail.value.result ? html`
+              <div style="margin-top:var(--s-3)">
+                <strong style="font-size:12px;color:var(--ink-mid)">结果:</strong>
+                <pre class="decision-content">${typeof detail.value.result === 'string'
+                  ? detail.value.result
+                  : JSON.stringify(detail.value.result, null, 2)}</pre>
+              </div>
+            ` : null}
           ` : null}
         </div>
       ` : null}
@@ -84,8 +90,6 @@ function TaskCard({ task }) {
 
 export function AgentTaskDashboard() {
   const status = useSignal('all');
-  const senderFilter = useSignal('');
-  const receiverFilter = useSignal('');
   const limit = useSignal(50);
   const offset = useSignal(0);
   const total = useSignal(0);
@@ -108,11 +112,6 @@ export function AgentTaskDashboard() {
 
   const setStatus = (s) => {
     status.value = s;
-    offset.value = 0;
-    load();
-  };
-
-  const applyFilter = () => {
     offset.value = 0;
     load();
   };
@@ -142,30 +141,28 @@ export function AgentTaskDashboard() {
         `)}
       </div>
 
-      <!-- Sender / Receiver filter row -->
-      <div style="display:flex;gap:var(--s-2);flex-wrap:wrap;">
-        <input style="border:1px solid var(--border-soft);border-radius:6px;padding:5px 10px;font-size:12px;background:var(--bg-elev);color:var(--ink);"
-               placeholder="发送者筛选…" value=${senderFilter.value}
-               onInput=${(e) => { senderFilter.value = e.target.value; }}
-               onKeyDown=${(e) => { if (e.key === 'Enter') applyFilter(); }} />
-        <input style="border:1px solid var(--border-soft);border-radius:6px;padding:5px 10px;font-size:12px;background:var(--bg-elev);color:var(--ink);"
-               placeholder="接收者筛选…" value=${receiverFilter.value}
-               onInput=${(e) => { receiverFilter.value = e.target.value; }}
-               onKeyDown=${(e) => { if (e.key === 'Enter') applyFilter(); }} />
-        <button class="action subtle" style="font-size:12px;" onClick=${applyFilter}>筛选</button>
-      </div>
-
-      <!-- Task list -->
+      <!-- Task table -->
       ${loading.value ? html`<p class="decision-loading">加载任务中…</p>` : null}
       ${!loading.value && list.length === 0 ? html`
         <div class="decisions-empty">
           <h3 class="decisions-empty-title">暂无任务</h3>
-          <p class="decisions-empty-hint">Agent 间任务流将在此显示。当其他 Agent 通过 send_task 派发任务时，这里会实时更新。</p>
+          <p class="decisions-empty-hint">Agent 间任务流将在此显示。</p>
         </div>
       ` : null}
-      <div class="decisions-list">
-        ${list.map((t) => html`<${TaskCard} key=${t.task_id} task=${t} />`)}
-      </div>
+      ${list.length > 0 ? html`
+        <div class="task-table">
+          <div class="task-table-head">
+            <span class="task-cell task-cell-id">任务 ID</span>
+            <span class="task-cell task-cell-from">发送者</span>
+            <span class="task-cell task-cell-to">接收者</span>
+            <span class="task-cell task-cell-status">状态</span>
+            <span class="task-cell task-cell-priority">优先级</span>
+            <span class="task-cell task-cell-time">时间</span>
+            <span class="task-cell task-cell-chevron"></span>
+          </div>
+          ${list.map((t) => html`<${TaskRow} key=${t.task_id} task=${t} />`)}
+        </div>
+      ` : null}
 
       <!-- Pagination -->
       ${total.value > limit.value ? html`

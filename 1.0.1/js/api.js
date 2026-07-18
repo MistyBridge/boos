@@ -67,6 +67,8 @@ export async function loadConfig() {
   ]);
   S.config.value = cfg;
   S.capabilities.value = caps;
+  // Sprint 17 A6: gate supervisor-only features.
+  S.isSupervisor.value = !!(caps?.supervisor || cfg?.supervisor);
 }
 
 // Update an existing CLI by id. patch is shallow-merged into the record.

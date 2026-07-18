@@ -392,6 +392,9 @@
      user knows the edge is interactive. */
   background: transparent;
   transition: background .12s ease;
+  /* Sprint 17 B3: promote the resize handle to GPU layer for smooth
+     pointer tracking without triggering layout recalculation per frame. */
+  will-change: transform;
 }
 .sidebar-resize-handle:hover,
 body.is-resizing-sidebar .sidebar-resize-handle {
@@ -931,4 +934,27 @@ body.is-resizing-sidebar * {
 .tree-sessions-txt-hint code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
+}
+
+/* ── Sprint 18: HR Agent standalone sidebar entry ────────────── */
+.tree-hr-agent {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+.tree-session.tree-session-hr {
+  font-weight: 450;
+  border-radius: 6px;
+  background: var(--sidebar-hover);
+}
+.tree-session.tree-session-hr:hover {
+  background: var(--sidebar-active);
+}
+.tree-session.tree-session-hr .tree-label {
+  letter-spacing: 0.02em;
+}
+.tree-hr-separator {
+  height: 1px;
+  background: var(--ui-border);
+  margin: 6px 8px 4px 8px;
+  opacity: 0.6;
 }
