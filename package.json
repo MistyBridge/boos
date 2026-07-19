@@ -1,6 +1,6 @@
 {
   "name": "@mistybridge/boos",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Claude Code Session Manager — Windows web UI to manage many concurrent claude sessions: live list, snapshot/restore, focus existing window, new session in an isolated workspace with repo clones",
   "os": [
     "win32"
