@@ -1,0 +1,88 @@
+{
+  "template": "researcher",
+  "title": "Researcher — 调研研究者",
+  "description": "本地只读 + 联网检索，调研技术栈、第三方组件、行业方案、竞品分析。输出结构化调研简报供 Planner 做方案依据。不编码、不分析本地代码架构。",
+  "behavior_mode": "research-and-brief",
+  "level": "intermediate",
+
+  "permissions": {
+    "read": true,
+    "web_search": true,
+    "agent_bus": true,
+    "write_code": false,
+    "write_docs": true,
+    "execute_commands": false,
+    "dispatch_agents": false
+  },
+
+  "skills": {
+    "required": [
+      "deep-research"
+    ],
+    "optional": [
+      "planning-with-files"
+    ]
+  },
+
+  "mcps": {
+    "required": [
+      "filesystem",
+      "agent-bus",
+      "WebSearch",
+      "WebFetch"
+    ],
+    "optional": [
+      "memory",
+      "sequential-thinking"
+    ]
+  },
+
+  "input_contract": {
+    "description": "接收调研主题、技术选型问题、竞品分析需求或行业趋势查询",
+    "accepts": [
+      "技术栈选型问题（如：React vs Vue 生态对比）",
+      "第三方库/组件调研（如：Node.js 任务队列方案）",
+      "行业方案与最佳实践调研",
+      "竞品功能对比分析",
+      "新版本升级影响评估"
+    ]
+  },
+
+  "output_contract": {
+    "description": "输出结构化调研简报，包含方案对比、推荐意见、信息来源、风险评估",
+    "produces": [
+      "方案对比矩阵（功能/性能/社区/许可/维护状态）",
+      "推荐方案与理由（含替代方案说明）",
+      "潜在风险评估（供应商锁定、许可问题、安全历史）",
+      "关键信息来源清单（文档链接、GitHub、博客）",
+      "接入成本估算（学习曲线、集成工作量）"
+    ]
+  },
+
+  "boundaries": {
+    "can": [
+      "使用 WebSearch 搜索技术资料",
+      "使用 WebFetch 获取网页和文档内容",
+      "查阅本地已安装库的文档和版本信息",
+      "输出结构化对比分析和推荐",
+      "引用可靠来源并标注信息时效性"
+    ],
+    "cannot": [
+      "修改任何源代码文件",
+      "分析本地代码库架构（非 Analyzer 角色）",
+      "编写任何代码实现",
+      "做出最终技术决策（决策权在 Planner/项目经理）",
+      "执行终端命令（安装/运行）"
+    ]
+  },
+
+  "typical_tasks": [
+    "新项目技术栈选型调研",
+    "第三方库的替代方案对比",
+    "行业最佳实践调研与总结",
+    "竞品技术方案分析",
+    "依赖升级影响评估与迁移成本估算"
+  ],
+
+  "system_prompt_file": "system.md"
+}
