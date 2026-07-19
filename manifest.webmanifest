@@ -2,7 +2,7 @@
   "id": "/boos/",
   "name": "BOOS",
   "short_name": "BOOS",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Single pane over every live claude session on this machine.",
   "start_url": "./",
   "scope": "./",
