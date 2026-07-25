@@ -13,6 +13,7 @@ export const T = {
   remote:    { title: '远程访问', subtitle: '通过隧道 + 令牌将此后端暴露给其他设备。' },
   about:     { title: '关于',     subtitle: 'boos — Claude CLI 会话管理器。' },
   decisions: { title: '决策',     subtitle: '审查并批准 AI 代理提出的决策。' },
+  goals:     { title: '目标',     subtitle: '跟踪团队目标与里程碑完成情况。' },
 
   // ── 侧边栏 ──
   sidebar: {
@@ -662,6 +663,8 @@ export const T = {
     urgent: '紧急',
     approve: '批准',
     reject: '拒绝',
+    defer: '推迟',
+    deferred: '已推迟',
     rejectWithComment: '拒绝并附评论…',
     loadingContent: '加载决策内容…',
     loadContentFailed: '加载失败 · ',
@@ -669,8 +672,33 @@ export const T = {
     noDecisionsHint: '当 AI 代理需要人工审批时，决策会出现在这里。',
     approvedToast: (title) => `已批准 · ${title}`,
     rejectedToast: (title) => `已拒绝 · ${title}`,
+    deferredToast: (title) => `已推迟 · ${title}`,
     byAgent: (name) => `${name} 提出`,
     inWorkspace: (ws) => `工作空间: ${ws}`,
+    summary: '概览',
+    pending: '待处理',
+    batchApprove: '批量批准',
+    batchReject: '批量驳回',
+    batchDefer: '批量推迟',
+    selected: (n) => `已选 ${n} 项`,
+    batchConfirm: (action, n) => `确定要${action} ${n} 条决策？`,
+    batchDone: (action, n) => `已${action} ${n} 条决策`,
+  },
+
+  // ── 目标页面 (GoalPage) ──
+  goalsPage: {
+    draft: '草稿',
+    active: '进行中',
+    completed: '已完成',
+    tasks: '任务',
+    milestones: '里程碑',
+    criteria: '验收标准',
+    activate: '▶ 激活',
+    activating: '激活中…',
+    noGoals: '暂无目标',
+    noGoalsHint: '等待 PM 创建 Sprint 目标。',
+    activated: (title) => `已激活 · ${title}`,
+    loadGoalsFailed: '加载目标失败 · ',
   },
 
   // ── CSS 伪元素文本 ──

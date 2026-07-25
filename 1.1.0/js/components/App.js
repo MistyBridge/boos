@@ -19,7 +19,8 @@ import { LaunchPage } from '../pages/LaunchPage.js';
 import { ConfigurePage } from '../pages/ConfigurePage.js';
 import { RemotePage } from '../pages/RemotePage.js';
 import { AboutPage } from '../pages/AboutPage.js';
-import { DecisionsPage } from '../pages/DecisionsPage.js';
+import { DecisionPage } from '../pages/DecisionPage.js';
+import { GoalPage } from '../pages/GoalPage.js';
 
 function Panel({ name, children }) {
   const active = activeTab.value === name;
@@ -137,7 +138,8 @@ export function App() {
           ${tab === 'remote' && !remoteLocked ? html`<${Panel} name="remote"><${RemotePage} /></${Panel}>` : null}
           ${remoteLocked        ? html`<${Panel} name="remote"><${RemoteHostOnlyPanel} /></${Panel}>` : null}
           ${tab === 'about'     ? html`<${Panel} name="about"><${AboutPage}     /></${Panel}>` : null}
-          ${tab === 'decisions' ? html`<${Panel} name="decisions"><${DecisionsPage} /></${Panel}>` : null}
+          ${tab === 'decisions' ? html`<${Panel} name="decisions"><${DecisionPage} /></${Panel}>` : null}
+          ${tab === 'goals'     ? html`<${Panel} name="goals"><${GoalPage} /></${Panel}>` : null}
         </div>
       </main>
       <${Toast} />

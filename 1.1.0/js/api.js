@@ -200,20 +200,33 @@ export async function createRepo({ name, url, defaultSelected }) {
 
 export async function loadSessions() {
   const r = await api('GET', '/api/sessions');
-  S.sessions.value = r.sessions || [];
-  try { localStorage.setItem('boos.sessions-cache', JSON.stringify(S.sessions.value)); } catch {}
+  const next = r.sessions || [];
+  // Sprint 18 P2: shallow diff — skip signal write (and the resulting
+  // full component-tree re-render) when the server data is unchanged.
+  if (JSON.stringify(next) !== JSON.stringify(S.sessions.value)) {
+    S.sessions.value = next;
+    try { localStorage.setItem('boos.sessions-cache', JSON.stringify(next)); } catch {}
+  }
 }
 
 export async function loadDeletedSessions() {
   const r = await api('GET', '/api/sessions/deleted');
-  S.deletedSessions.value = r.sessions || [];
-  try { localStorage.setItem('boos.deleted-sessions-cache', JSON.stringify(S.deletedSessions.value)); } catch {}
+  const next = r.sessions || [];
+  // P2: shallow diff — skip signal write when unchanged.
+  if (JSON.stringify(next) !== JSON.stringify(S.deletedSessions.value)) {
+    S.deletedSessions.value = next;
+    try { localStorage.setItem('boos.deleted-sessions-cache', JSON.stringify(next)); } catch {}
+  }
 }
 
 export async function loadFolders() {
   const r = await api('GET', '/api/folders');
-  S.folders.value = (r.folders || []).sort((a, b) => (a.order || 0) - (b.order || 0));
-  try { localStorage.setItem('boos.folders-cache', JSON.stringify(S.folders.value)); } catch {}
+  const next = (r.folders || []).sort((a, b) => (a.order || 0) - (b.order || 0));
+  // P2: shallow diff — skip signal write when unchanged.
+  if (JSON.stringify(next) !== JSON.stringify(S.folders.value)) {
+    S.folders.value = next;
+    try { localStorage.setItem('boos.folders-cache', JSON.stringify(next)); } catch {}
+  }
 }
 
 export async function createFolder(name) {
@@ -385,7 +398,11 @@ export async function adoptSession({ cliId, cliSessionId, cwd, title, folderId }
 
 export async function loadWorkspaces() {
   const r = await api('GET', '/api/workspaces');
-  S.workspaces.value = r.workspaces;
+  const next = r.workspaces;
+  // P2: shallow diff — skip signal write when unchanged.
+  if (JSON.stringify(next) !== JSON.stringify(S.workspaces.value)) {
+    S.workspaces.value = next;
+  }
 }
 
 export async function deleteWorkspace(name) {
@@ -461,6 +478,50 @@ export async function replyDecision(decisionId, body) {
   return r;
 }
 
+// Sprint 24: decision summary + batch operations.
+export async function fetchDecisionSummary() {
+  const r = await api('GET', '/api/decisions/summary');
+  S.decisionSummary.value = r || { open: 0, urgent: 0, deferred: 0 };
+  return S.decisionSummary.value;
+}
+
+export async function batchDecisions(action, ids) {
+  const r = await api('POST', '/api/decisions/batch', {
+    decisions: ids.map((id) => ({ id, action })),
+  });
+  await fetchDecisions();
+  await fetchDecisionSummary();
+  return r;
+}
+
+export async function deferDecision(decisionId) {
+  const r = await api('POST', `/api/decisions/${encodeURIComponent(decisionId)}/defer`);
+  await fetchDecisions();
+  await fetchDecisionSummary();
+  return r;
+}
+
+// ── Goals (Sprint 24) ─────────────────────────────────────────
+
+export async function fetchGoals() {
+  const r = await api('GET', '/api/goals?workspace=boos');
+  const next = r.goals || [];
+  if (JSON.stringify(next) !== JSON.stringify(S.goals.value)) {
+    S.goals.value = next;
+  }
+  return next;
+}
+
+export async function getGoalDetail(goalId) {
+  return api('GET', `/api/goals/${encodeURIComponent(goalId)}`);
+}
+
+export async function activateGoal(goalId) {
+  const r = await api('POST', `/api/goals/${encodeURIComponent(goalId)}/activate`);
+  await fetchGoals();
+  return r;
+}
+
 let consecutiveOffline = 0;
 export async function pollHealth() {
   const ctrl = new AbortController();
@@ -470,15 +531,28 @@ export async function pollHealth() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
     consecutiveOffline = 0;
-    S.serverHealth.value = { state: 'online', version: j.version, pid: j.pid, failureCount: 0 };
+    // Sprint 18 P2: only write signal when value actually changed.
+    const nextOnline = { state: 'online', version: j.version, pid: j.pid, failureCount: 0 };
+    const prevOnline = S.serverHealth.value;
+    if (!prevOnline || prevOnline.state !== nextOnline.state ||
+        prevOnline.version !== nextOnline.version ||
+        prevOnline.pid !== nextOnline.pid ||
+        prevOnline.failureCount !== nextOnline.failureCount) {
+      S.serverHealth.value = nextOnline;
+    }
     if (!S.hasBootedOnline.value) S.hasBootedOnline.value = true;
   } catch (e) {
     consecutiveOffline++;
-    S.serverHealth.value = {
+    const nextOffline = {
       state: 'offline',
       error: String(e.message || e),
       failureCount: consecutiveOffline,
     };
+    const prevOffline = S.serverHealth.value;
+    if (!prevOffline || prevOffline.state !== nextOffline.state ||
+        prevOffline.failureCount !== nextOffline.failureCount) {
+      S.serverHealth.value = nextOffline;
+    }
   } finally {
     clearTimeout(t);
   }
@@ -575,7 +649,11 @@ export async function fetchTasks({ uid, status, limit = 50, offset = 0 } = {}) {
   params.set('limit', String(limit));
   params.set('offset', String(offset));
   const r = await api('GET', `/api/agent-bus/tasks?${params.toString()}`);
-  S.tasks.value = r.tasks || [];
+  const next = r.tasks || [];
+  // P2: shallow diff — skip signal write when unchanged.
+  if (JSON.stringify(next) !== JSON.stringify(S.tasks.value)) {
+    S.tasks.value = next;
+  }
   return r;
 }
 

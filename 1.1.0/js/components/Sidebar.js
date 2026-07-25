@@ -22,7 +22,7 @@ import { buildLaunchBodyFromState } from '../launchState.js';
 import {
   IconLaunch, IconConfigure, IconRemote, IconWorkspace,
   IconSidebarToggle, IconPencil, IconClose, IconFolder, IconFolderOpen, IconPlus,
-  IconTrash, IconRestore, IconTerminal, BrandMark, IconCanvas, IconDecisions, IconSettings,
+  IconTrash, IconRestore, IconTerminal, BrandMark, IconCanvas, IconDecisions, IconSettings, IconSparkle,
 } from '../icons.js';
 import { SearchBar, matchesFilter } from './SearchBar.js';
 import { FolderSettingsModal } from '../pages/ConfigurePage.js';
@@ -585,6 +585,7 @@ export function Sidebar() {
                    onClick=${() => { workspaceFolderId.value = null; }} />
         <${NavItem} tab="decisions" icon=${html`<${IconDecisions} />`} label=${T.decisions.title}
                    badge=${pendingDecisionCount.value} />
+        <${NavItem} tab="goals"     icon=${html`<${IconSparkle} />`}   label=${T.goals.title} />
         ${!isRemoteAccess() ? html`
           <${NavItem} tab="remote"  icon=${html`<${IconRemote} />`}    label=${T.remote.title} />
         ` : null}

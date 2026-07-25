@@ -336,6 +336,30 @@
   background: rgba(183, 63, 63, 0.08);
   color: var(--danger, #b73f3f);
 }
+.decision-badge.deferred {
+  background: rgba(138, 132, 117, 0.1);
+  color: var(--ink-muted);
+}
+
+/* Batch mode checkbox */
+.decision-card-check {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.decision-card-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* Selected state for batch mode */
+.decision-card.is-selected {
+  background: var(--accent-softer);
+  border-color: var(--accent-soft);
+}
 
 /* Expanded body */
 .decision-card-body {
