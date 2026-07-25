@@ -1,7 +1,7 @@
 // BOOS Service Worker — caches the frontend static assets for offline
 // resilience. API requests always go to the network (no caching). Uses
 // a cache-first strategy for static files with a network fallback.
-const CACHE_NAME = 'boos-v1';
+const CACHE_NAME = 'boos-v2';
 
 // Assets to pre-cache on install: the frontend shell that loads before
 // any API call succeeds (version router + per-version frontend).
