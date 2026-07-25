@@ -58,6 +58,9 @@ export const installPrompt    = signal(null);            // captured beforeinsta
 export const isInstalledPwa   = signal(false);           // running inside an installed PWA window
 export const sessionFilter    = signal('');              // search/filter string for sidebar session tree
 export const decisions        = signal([]);              // decision records from /api/decisions
+// Sprint 24: goals from /api/goals
+export const goals            = signal([]);              // goal records from /api/goals
+export const decisionSummary  = signal({ open: 0, urgent: 0, deferred: 0 });
 // Sprint 17 A4: agent-bus task stream for AgentTaskDashboard.
 export const tasks            = signal([]);              // task records from /api/agent-bus/tasks
 export const taskFilter       = signal({ status: 'all', sender: '', receiver: '' });
@@ -143,6 +146,7 @@ export const TAB_HEADINGS = {
   about:     T.about,
   workspace: T.sessions,
   decisions: T.decisions,
+  goals:     T.goals,
 };
 
 // ── persistence helpers (localStorage) ──────────────────────────

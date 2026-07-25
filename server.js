@@ -328,8 +328,9 @@ require('./routes/version').register(app, {
   },
 });
 
-// ---- decisions ----
+// ---- decisions + goals ----
 require('./routes/decisions').register(app, { asyncH });
+require('./routes/goals').register(app, { asyncH });   // Sprint 24: AutoPilot goals
 require('./routes/hr').register(app, { hrAgent: require('./lib/hrAgent') });
 require('./routes/archive').register(app, { asyncH });        // Sprint 9: archive system
 require('./routes/agents').register(app, { asyncH });        // Sprint 9: agent-bus ↔ canvas bridge
@@ -751,6 +752,22 @@ async function _isBoosProcess(pid) {
   const apiUrl = `http://localhost:${port}`;
   const FRONTEND_URL = IS_DEV ? apiUrl : 'https://MistyBridge.github.io/boos/';
   lifecycleState.frontendUrl = FRONTEND_URL;
+  // ── Crash resilience ────────────────────────────────────────────
+  // Log unhandled rejections and exceptions instead of silently
+  // crashing. They still indicate bugs, but a crashing process leaves
+  // no breadcrumbs and kills the user's session mid-flight.
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('[boos] UNHANDLED REJECTION:', reason?.message || reason);
+    if (reason?.stack) console.error(reason.stack);
+  });
+  process.on('uncaughtException', (err) => {
+    console.error('[boos] UNCAUGHT EXCEPTION:', err.message);
+    if (err.stack) console.error(err.stack);
+    // Don't exit — the process might still serve other requests.
+    // If it's truly fatal, the heartbeat watchdog or idleWatcher
+    // will clean up.
+  });
+
   console.log(
     `boos listening on ${apiUrl}${port !== preferredPort ? `  (requested ${preferredPort}, was taken)` : ''}`,
   );

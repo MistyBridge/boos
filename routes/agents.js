@@ -116,6 +116,225 @@ function register(app, { asyncH }) {
       })) })}\n\n`);
     }
   });
+
+  // ── Agent Activation REST API (Sprint 19) ──────────────────────────────
+
+  // POST /api/agents/wake — wake a single agent by UID or name+workspace.
+  app.post('/api/agents/wake', asyncH(async (req, res) => {
+    const body = req.body || {};
+    const uid = String(body.uid || '').trim();
+    const name = String(body.name || '').trim();
+    const workspace = String(body.workspace || '').trim();
+    const urgency = (String(body.urgency || '').toLowerCase() === 'urgent') ? 'urgent' : 'normal';
+
+    if (!uid && (!name || !workspace)) {
+      return res.status(400).json({ error: 'uid or name+workspace pair required' });
+    }
+    if (body.urgency && !['normal', 'urgent'].includes(String(body.urgency).toLowerCase())) {
+      return res.status(400).json({ error: 'urgency must be "normal" or "urgent"' });
+    }
+
+    let store, notifications, handlers;
+    try { store = require('../lib/agentBus/store'); } catch { store = null; }
+    if (!store) return res.status(500).json({ error: 'agent-bus store unavailable' });
+
+    // Resolve agent.
+    let agent;
+    if (uid) {
+      agent = store.getAgent(uid);
+      if (!agent) return res.status(400).json({ ok: false, error: 'agent not found by uid: ' + uid });
+    } else {
+      agent = store.findAgentByNameWs(name, workspace);
+      if (!agent) return res.status(400).json({ ok: false, error: 'agent not found: ' + name + ' / ' + workspace });
+    }
+
+    // Optional: launch BOOS session before waking (non-fatal if fails).
+    if (body.launch === true || body.launch === 'true') {
+      try {
+        handlers = require('../lib/agentBus/handlers');
+        await handlers._internalLaunchAgentSession(agent.uid, agent.name, agent.workspace);
+      } catch {}
+    }
+
+    try { notifications = require('../lib/agentBus/notifications'); } catch { notifications = null; }
+    if (!notifications) return res.status(500).json({ error: 'notifications module unavailable' });
+
+    const result = await notifications.wakeAgent(agent.uid, {
+      urgency,
+      message: String(body.message || '').slice(0, 256),
+    });
+    res.json(result);
+  }));
+
+  // POST /api/agents/wake-all — wake all agents with pending tasks.
+  app.post('/api/agents/wake-all', asyncH(async (req, res) => {
+    const body = req.body || {};
+    const wsFilter = String(body.workspace || '').trim() || null;
+    const urgency = (String(body.urgency || '').toLowerCase() === 'urgent') ? 'urgent' : 'normal';
+
+    if (body.urgency && !['normal', 'urgent'].includes(String(body.urgency).toLowerCase())) {
+      return res.status(400).json({ error: 'urgency must be "normal" or "urgent"' });
+    }
+
+    let store, notifications;
+    try { store = require('../lib/agentBus/store'); } catch { store = null; }
+    if (!store) return res.status(500).json({ error: 'agent-bus store unavailable' });
+    try { notifications = require('../lib/agentBus/notifications'); } catch { notifications = null; }
+    if (!notifications) return res.status(500).json({ error: 'notifications module unavailable' });
+
+    const pendingUids = store.listAllPendingQueues();
+    if (pendingUids.length === 0) {
+      return res.json({ ok: true, triggered: 0, results: [], hint: 'No agents have pending tasks.' });
+    }
+
+    // Resolve + filter by workspace.
+    const targets = [];
+    for (const uid of pendingUids) {
+      const a = store.getAgent(uid);
+      if (!a) continue;
+      if (wsFilter && a.workspace !== wsFilter) continue;
+      targets.push(a);
+    }
+
+    const message = String(body.message || '').slice(0, 256);
+    const results = await Promise.all(targets.map(async (a) => {
+      try {
+        const r = await notifications.wakeAgent(a.uid, { urgency, message });
+        return { uid: a.uid, name: a.name, ...r };
+      } catch (e) {
+        return { uid: a.uid, name: a.name, ok: false, error: e.message };
+      }
+    }));
+
+    const succeeded = results.filter((r) => r.ok).length;
+    const failed = results.length - succeeded;
+    const hintParts = ['Successfully woke ' + succeeded + ' agents.'];
+    if (failed > 0) hintParts.push(failed + ' failures.');
+
+    res.json({ ok: true, triggered: results.length, results, hint: hintParts.join(' ') });
+  }));
+
+  // GET /api/agents/status — enriched agent status with PTY/session detail.
+  app.get('/api/agents/status', asyncH(async (req, res) => {
+    const uid = String(req.query.uid || '').trim();
+    const name = String(req.query.name || '').trim();
+    const workspace = String(req.query.workspace || '').trim();
+
+    let store;
+    try { store = require('../lib/agentBus/store'); } catch { store = null; }
+    if (!store) return res.status(500).json({ error: 'agent-bus store unavailable' });
+
+    // Resolve target agent(s).
+    let agents = [];
+    if (uid) {
+      const a = store.getAgent(uid);
+      if (!a) return res.status(404).json({ error: 'agent not found by uid: ' + uid });
+      agents = [a];
+    } else if (name && workspace) {
+      const a = store.findAgentByNameWs(name, workspace);
+      if (!a) return res.status(404).json({ error: 'agent not found: ' + name + ' / ' + workspace });
+      agents = [a];
+    } else {
+      agents = store.listAllAgents();
+    }
+
+    // Load BOOS sessions + identity resolver once.
+    let sessions = [], resolver = null, webTerminalMod = null;
+    try {
+      const ps = require('../lib/persistedSessions');
+      sessions = await ps.loadAll();
+    } catch {}
+    try { resolver = require('../lib/identityResolver').getResolver(); } catch {}
+    try { webTerminalMod = require('../lib/webTerminal'); } catch {}
+
+    const enriched = agents.map((agent) => {
+      let boosSid = null;
+      try { boosSid = resolver ? resolver.canonical(agent.uid) : null; } catch {}
+      const transportSid = store.getSessionByAgentUid(agent.uid);
+      const sid = boosSid || transportSid;
+      const session = sid ? sessions.find((s) => s.id === sid && !s.deletedAt) : null;
+
+      let ptyInfo = null;
+      if (session && webTerminalMod) {
+        const term = webTerminalMod.get(session.id);
+        ptyInfo = term ? {
+          pid: term.meta?.pid || null,
+          exitedAt: term.exitedAt || null,
+        } : null;
+      }
+
+      const online = !!(session && session.status === 'running' && ptyInfo && !ptyInfo.exitedAt);
+
+      let activeTasks = [];
+      try { activeTasks = store.listActiveTasks(agent.uid); } catch {}
+      const pendingTasks = store.countPendingTasks(agent.uid);
+
+      return {
+        uid: agent.uid,
+        name: agent.name,
+        workspace: agent.workspace,
+        role: agent.role || 'worker',
+        capabilities: agent.capabilities || [],
+        online,
+        session_id: sid || null,
+        session_status: session ? session.status : null,
+        pty_info: ptyInfo,
+        pending_tasks: pendingTasks,
+        active_tasks: activeTasks.slice(0, 10).map((t) => ({
+          task_id: t.task_id,
+          status: t.status,
+          priority: t.priority,
+          content_preview: (t.content || '').slice(0, 100),
+          created_at: t.created_at,
+        })),
+        registered_at: agent.registered_at || null,
+        last_seen_at: agent.last_seen_at || null,
+        unresponsive: agent.unresponsive || false,
+      };
+    });
+
+    let summary = null;
+    if (!uid && !(name && workspace)) {
+      const onlineCount = enriched.filter((a) => a.online).length;
+      const busyCount = enriched.filter((a) => a.active_tasks.some((t) => t.status === 'in_progress')).length;
+      const totalPending = enriched.reduce((sum, a) => sum + a.pending_tasks, 0);
+      summary = { online: onlineCount, offline: enriched.length - onlineCount, busy: busyCount, total_pending_tasks: totalPending };
+    }
+
+    if (agents.length === 1) {
+      res.json({ ok: true, agent: enriched[0] });
+    } else {
+      res.json({ ok: true, agents: enriched, count: enriched.length, summary });
+    }
+  }));
+
+  // ── Sprint 24: TeamCompact ──────────────────────────────────────────
+
+  // POST /api/agents/compact — inject /compact into all idle worker PTYs.
+  app.post('/api/agents/compact', asyncH(async (req, res) => {
+    const ws = String((req.body || {}).workspace || '').trim();
+    if (!ws) return res.status(400).json({ error: 'workspace required' });
+
+    // Gate 1: supervisor only (check via agent-bus role).
+    const agentUid = req.headers['x-agent-uid'] || '';
+    let store, isSupervisor = false;
+    try { store = require('../lib/agentBus/store'); } catch { store = null; }
+    if (store && agentUid) {
+      const agent = store.getAgent(agentUid);
+      isSupervisor = !!(agent && agent.role === 'supervisor');
+    }
+    if (!isSupervisor) return res.status(403).json({ error: 'supervisor only' });
+
+    let notifications;
+    try { notifications = require('../lib/agentBus/notifications'); } catch { notifications = null; }
+    if (!notifications) return res.status(500).json({ error: 'notifications module unavailable' });
+
+    const result = await notifications.compactAllWorkers(ws, {
+      milestone: (req.body || {}).milestone || null,
+      note: (req.body || {}).note || null,
+    });
+    res.status(result.ok ? 200 : 400).json(result);
+  }));
 }
 
 // ── SSE broadcast ────────────────────────────────────────────────────────

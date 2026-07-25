@@ -6,8 +6,8 @@ const assert = require('node:assert/strict');
 const { TOOLS } = require('../lib/agentBus/schemas');
 
 describe('Agent-Bus Tool Schemas', () => {
-  test('all 22 tools are defined', () => {
-    assert.ok(TOOLS.length >= 22, `expected >=22 tools, got ${TOOLS.length}`);
+  test('all tools are defined', () => {
+    assert.ok(TOOLS.length >= 30, `expected >=30 tools, got ${TOOLS.length}`);
   });
 
   test('every tool has name + description + inputSchema', () => {
@@ -35,7 +35,7 @@ describe('Agent-Bus Tool Schemas', () => {
       'send_task', 'check_inbox', 'cancel_task', 'interrupt_task',
       'respond_task', 'list_my_tasks', 'get_task', 'broadcast',
       'define_workflow', 'add_stage', 'add_dependency', 'activate_workflow',
-      'request_decision', 'check_decisions',
+      'request_decision',
       'assign_task', 'list_all_agents', 'kill_worker',
       'boos_terminal_list', 'wake_agent',
     ];

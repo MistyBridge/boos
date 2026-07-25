@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.1.0 (2026-07-19)
+
+Agent-Bus 全栈事件驱动平台 + Sandbox + HR Agent + 原子性锁。
+
+### Agent-Bus: 事件驱动零轮询 (Sprint 21)
+- **Event-driven architecture**: `check_inbox` 改为非阻塞，Agent 启动后检查一次即休眠
+- **wake_agent**: PM 发任务时通过 SSE 通知 + PTY 注入自动唤醒休眠 Agent
+- **respond_task 强制**: 收到任务必须回复，否则 120s 自动回收
+- **SSE transport 稳定性**: 双通道投递 (SSE + PTY)，1s debounce，失败追踪 (max 3)
+- **Stale task reclaimer**: in_progress 超 120s 无响应 → 自动回收到 pending (Sprint 17)
+- **Task timeout + escalation**: D2 超时升级到 Root/PM inbox (Sprint 10)
+
+### 原子性锁 + 统一身份索引 (Sprint 22)
+- **writeIdentity()**: 统一原子写入，一次调用更新三个反向索引 (boos_session, mcp_session, name|workspace)
+- **agentUid O(1) 查找**: persistedSessions 新增 `agentUid` 字段，`_findSessionByUid` 从 5-pass 50 行简化为 6 行单次查找
+- **移除 `__pending__` sentinel**: 所有 placeholder 替换为 truthy/falsy 检查
+- **rebuildAllIndices()**: 从 identity cards 重建所有反向索引（无启发式匹配）
+
+### Agent 通讯隔离 + 原子性 (Sprint 16)
+- **SSE-only 通信**: Agent 间通信通过 SSE transport，PTY 仅用于人机交互
+- **Store/Queue 原子性**: `claimPendingTaskAsync`, `cancelTaskAtomic`, `interruptTaskAtomic` — 消除 TOCTOU 竞态
+- **MCP 审计报告**: agent-bus 端点合规验证
+
+### HR Agent + Sandbox (Sprint 18)
+- **HR Agent 完整实现**: 16 角色模板，中文别名匹配，自动招募 (改 CLAUDE.md + .mcp.json)
+- **withFileLock 超时修复**: 防止死锁的文件锁机制
+- **Sandbox 隔离**: 安全沙箱执行环境
+
+### 其他
+- **SSE transport env var 可配**: `BOOS_MAX_SSE_CONNECTIONS`, `BOOS_MSG_RATE_LIMIT`, `BOOS_MSG_RATE_WINDOW_MS`, `BOOS_SESSION_TTL_MS`
+- **Workflow Engine DAG**: 拓扑排序、循环检测、能力自动分发
+- **Decision System 2.0**: MD 文件决策系统 + REST API + 飞书 webhook
+- **CI 矩阵**: 3 OS × 2 Node versions, cross-platform 脚本验证
+- **Tests**: 316 tests / 0 fail
+
 ## 1.0.0 (2026-07-13)
 
 Brand-new architecture: `@MistyBridge/boos` — a complete rewrite from

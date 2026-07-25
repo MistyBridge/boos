@@ -52,6 +52,13 @@ function register(app, { asyncH }) {
   );
 
 
+  // GET /api/decisions/summary — per-workspace decision stats (MUST be before :id)
+  app.get('/api/decisions/summary', asyncH(async (req, res) => {
+    const ws = req.query.workspace || null;
+    const s = decisionSystem.summaryDecisions(ws);
+    res.json({ ok: true, ...s });
+  }));
+
   // GET /api/decisions/:id — get full .md content
   app.get(
     '/api/decisions/:id',
@@ -131,6 +138,35 @@ function register(app, { asyncH }) {
       res.json({ ok: true, task_id });
     }),
   );
+
+  // ── Sprint 24: Decision Area 2.0 ─────────────────────────────────────────
+
+  // POST /api/decisions/batch — batch approve/reject/defer
+  app.post('/api/decisions/batch', asyncH(async (req, res) => {
+    const { decisions } = req.body || {};
+    if (!Array.isArray(decisions) || decisions.length === 0) {
+      return res.status(400).json({ error: 'decisions array required' });
+    }
+    const r = decisionSystem.batchDecisions(decisions);
+    // Notify agents for approve/reject actions.
+    for (const item of r.results) {
+      if (!item.ok) continue;
+      const action = decisions.find((d) => d.id === item.decision_id)?.action;
+      if (action === 'approve' || action === 'reject') {
+        const approver = decisions.find((d) => d.id === item.decision_id)?.approver || 'host';
+        const comment = decisions.find((d) => d.id === item.decision_id)?.comment || '';
+        await _notifyAgentOfDecision(item, action === 'approve' ? 'approved' : 'rejected', approver, comment).catch(() => {});
+      }
+    }
+    res.json(r);
+  }));
+
+  // POST /api/decisions/:id/defer — defer a decision (30min auto-reminder)
+  app.post('/api/decisions/:id/defer', asyncH(async (req, res) => {
+    const r = decisionSystem.deferDecision(req.params.id);
+    if (!r.ok) return res.status(400).json(r);
+    res.json(r);
+  }));
 
 }
 
