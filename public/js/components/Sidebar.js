@@ -583,9 +583,9 @@ export function Sidebar() {
         <${NavItem} tab="launch"    icon=${html`<${IconLaunch} />`}    label=${T.sidebar.newSession} />
         <${NavItem} tab="workspace" icon=${html`<${IconWorkspace} />`} label="工作区"
                    onClick=${() => { workspaceFolderId.value = null; }} />
-        <${NavItem} tab="decisions" icon=${html`<${IconDecisions} />`} label=${T.decisions.title}
+        <${NavItem} tab="decisions" icon=${html`<${IconDecisions} />`} label="决策区"
                    badge=${pendingDecisionCount.value} />
-        <${NavItem} tab="goals"     icon=${html`<${IconSparkle} />`}   label=${T.goals.title} />
+        <${NavItem} tab="goals"     icon=${html`<${IconSparkle} />`}   label="目标" />
         ${!isRemoteAccess() ? html`
           <${NavItem} tab="remote"  icon=${html`<${IconRemote} />`}    label=${T.remote.title} />
         ` : null}
