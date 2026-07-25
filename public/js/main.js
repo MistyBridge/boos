@@ -1,6 +1,9 @@
 // Entry. Loads persisted ui state → boots data → mounts App → spins up
 // the 5s auto-refresh + 1s clock tick. No imperative DOM access outside
 // the mount root.
+// Sprint 24 — 决策区+目标面板 — v1.1.0.20260726
+console.log('%c[boos] v1.1.0-sprint24 loaded %c决策区+目标面板已就绪',
+  'color:#b3614a;font-weight:bold;font-size:14px;', '');
 
 import { render } from 'preact';
 import { effect } from '@preact/signals';
@@ -243,7 +246,13 @@ window.addEventListener('resize', syncViewportHeight);
       // health so the OfflineBanner can show if the host goes down
       // while we're sitting on the approval screen.
       pollHealth();
-      clockTick.value = Date.now();
+      // Sprint 18 P2: only update clockTick when the minute boundary
+    // crosses, since fmtAgo resolution is one-minute buckets.
+    // Avoids needless re-renders of every "Ns ago" label every 5s.
+    const now = Date.now();
+    if (Math.floor(now / 60000) !== Math.floor(clockTick.value / 60000)) {
+      clockTick.value = now;
+    }
       return;
     }
     try {
@@ -251,7 +260,13 @@ window.addEventListener('resize', syncViewportHeight);
       lastRefreshAt.value = Date.now();
     } catch { /* swallow — next tick retries */ }
     pollHealth();
-    clockTick.value = Date.now();
+    // Sprint 18 P2: only update clockTick when the minute boundary
+    // crosses, since fmtAgo resolution is one-minute buckets.
+    // Avoids needless re-renders of every "Ns ago" label every 5s.
+    const now = Date.now();
+    if (Math.floor(now / 60000) !== Math.floor(clockTick.value / 60000)) {
+      clockTick.value = now;
+    }
   }, refreshMs);
 
   // Heartbeat · the server uses this to (a) decide whether to shut down
