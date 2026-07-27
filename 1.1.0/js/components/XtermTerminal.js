@@ -74,7 +74,7 @@ export class XtermTerminal {
       rows: lastKnownGridDimensions.rows,
       cursorBlink: true,
       cursorStyle: 'bar',
-      scrollback: 5000,
+      scrollback: 2000,    // Caps reflow cost on resize — higher values cause WebGL atlas rebuild tearing
       allowProposedApi: true,
       theme: this.currentTheme,
       // Same modern keyboard protocols VS Code enables when configured.
@@ -191,14 +191,21 @@ export class XtermTerminal {
   // corruption over long-running sessions. Uses requestIdleCallback
   // (or fallback setTimeout) to avoid competing with CSS transitions
   // and user input — atlas rebuilds only during browser idle periods.
-  startAtlasRefresh(intervalMs = 30000) {
+  //
+  // Sprint 18 P0: accepts optional `shouldRefresh` predicate. When
+  // provided, atlas rebuild is skipped unless the predicate returns
+  // true. TerminalInstance uses this to suppress rebuilds while output
+  // is actively streaming (prevents WebGL texture-tear).
+  startAtlasRefresh(intervalMs = 30000, shouldRefresh) {
     if (this._atlasTimer) return;
     const tick = () => {
       if (this._atlasDisposed) return;
       if (this.host?.isConnected) {
-        (typeof requestIdleCallback !== 'undefined'
-          ? requestIdleCallback
-          : (fn) => setTimeout(fn, 0))(() => this.forceRedraw());
+        if (!shouldRefresh || shouldRefresh()) {
+          (typeof requestIdleCallback !== 'undefined'
+            ? requestIdleCallback
+            : (fn) => setTimeout(fn, 0))(() => this.forceRedraw());
+        }
       }
       this._atlasTimer = setTimeout(tick, intervalMs);
     };

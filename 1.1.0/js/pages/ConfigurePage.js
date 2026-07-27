@@ -21,6 +21,7 @@ import { boosConfirm } from '../dialog.js';
 import { keybindings, setBinding, resetBinding, ACTIONS, formatCombo } from '../keybindings.js';
 import { T } from '../i18n.js';
 import { KeybindingRecorder } from '../components/KeybindingRecorder.js';
+import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { Card } from '../components/Card.js';
 import { PageTitleBar } from '../components/PageTitleBar.js';
 import { EntityFormModal } from '../components/EntityFormModal.js';
@@ -182,9 +183,8 @@ export function ConfigurePage() {
 
   const close = () => setEdit(null);
 
-  return html`
+  return html`<${ErrorBoundary} name="ConfigurePage">
     <${PageTitleBar} title="设置" />
-    <div class="settings-scroll">
 
     <${Section} title="通用">
       <div class="config-grid">
@@ -1064,5 +1064,6 @@ function KeybindingsList() {
       <${KeybindingRecorder}
         actionLabel=${ACTIONS[recording]?.label || recording}
         onCommit=${(combo) => { setBinding(recording, combo); setRecording(null); }}
-        onCancel=${() => setRecording(null)} />` : null}`;
+        onCancel=${() => setRecording(null)} />` : null}
+  </${ErrorBoundary}>`;
 }

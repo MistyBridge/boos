@@ -319,6 +319,35 @@ async function bootVersionGuard() {
 }
 
   // Register the service worker for PWA offline caching.
+  // Listens for updates and prompts the user when a new version is available.
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+    let swUpdateToast = false;
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).then((reg) => {
+      // Check for updates on page load (in case a new SW was installed
+      // while this page was closed).
+      reg.update().catch(() => {});
+
+      // Listen for a new SW taking over.
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          // New SW installed and waiting — prompt user to refresh.
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller && !swUpdateToast) {
+            swUpdateToast = true;
+            const msg = '新版本已就绪。刷新页面以应用更新。';
+            setToast(msg, 'ok');
+          }
+        });
+      });
+    }).catch(() => {});
+
+    // Also check on visibility change (user returns to tab).
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.getRegistration().then((reg) => {
+          if (reg) reg.update().catch(() => {});
+        });
+      }
+    });
   }

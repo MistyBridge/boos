@@ -225,9 +225,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
-  /* Sprint 17 B3: strict containment isolates the decisions list from
-     page reflows — size is computed once and doesn't invalidate siblings. */
-  contain: strict;
 }
 
 .decisions-empty {

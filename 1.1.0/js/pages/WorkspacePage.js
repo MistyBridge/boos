@@ -8,14 +8,14 @@
 import { html } from '../html.js';
 import { useEffect, useRef, useState, useCallback } from 'preact/hooks';
 import {
-  sessions, config, activeSessionId, selectSession, selectWorkspaceAgent,
-  workspaceAgentActivity, workspaceFolderId, sessionsByFolder, folders,
+  sessions, config, activeSessionId, selectWorkspaceAgent,
+  workspaceAgentActivity, workspaceAgentPositions, workspaceFolderId, sessionsByFolder, folders,
 } from '../state.js';
 import { fetchAgents, subscribeAgentEvents, sendAgentCommand } from '../api.js';
 import { setToast } from '../toast.js';
 // Layout persisted in localStorage (keyed by workspace name) —
 // avoids dependency on physical workspace directories.
-const LS_LAYOUT_PREFIX = 'boos.workspace-layout.';
+const LS_LAYOUT_PREFIX = 'boos.canvas-positions.';
 import { PageTitleBar } from '../components/PageTitleBar.js';
 import { AgentCanvas } from '../components/AgentCanvas.js';
 import { WorkspaceTerminal } from '../components/WorkspaceTerminal.js';
@@ -113,6 +113,8 @@ export function WorkspacePage() {
 
   // ── local state ──────────────────────────────────────────────────
   const [layout, setLayout] = useState({ agentPositions: {}, splitRatio: 0.5 });
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [pendingCounts, setPendingCounts] = useState({});
@@ -217,10 +219,13 @@ export function WorkspacePage() {
       const raw = localStorage.getItem(LS_LAYOUT_PREFIX + wsName);
       if (raw) {
         const data = JSON.parse(raw);
+        const pos = data.agentPositions || {};
         setLayout({
-          agentPositions: data.agentPositions || {},
+          agentPositions: pos,
           splitRatio: typeof data.splitRatio === 'number' ? data.splitRatio : 0.5,
         });
+        // Sync to global signal on load.
+        workspaceAgentPositions.value = pos;
       }
     } catch {}
   }, [wsName, refreshKey]);
@@ -229,11 +234,14 @@ export function WorkspacePage() {
 
   const _handleSaveLayout = useCallback((data) => {
     if (!wsName) return;
+    const positions = data.agentPositions || {};
     try {
       localStorage.setItem(LS_LAYOUT_PREFIX + wsName, JSON.stringify({
-        agentPositions: data.agentPositions || {},
+        agentPositions: positions,
         splitRatio: layout.splitRatio,
       }));
+      // Sync to global signal so other components can read positions.
+      workspaceAgentPositions.value = positions;
     } catch {}
   }, [wsName, layout.splitRatio]);
 
@@ -258,10 +266,11 @@ export function WorkspacePage() {
     const _onUp = () => {
       setIsDraggingSplit(false);
       if (wsName) {
+        const cur = layoutRef.current;
         try {
           localStorage.setItem(LS_LAYOUT_PREFIX + wsName, JSON.stringify({
-            agentPositions: layout.agentPositions,
-            splitRatio: layout.splitRatio,
+            agentPositions: cur.agentPositions,
+            splitRatio: cur.splitRatio,
           }));
         } catch {}
       }
@@ -273,12 +282,14 @@ export function WorkspacePage() {
       window.removeEventListener('pointermove', _onMove);
       window.removeEventListener('pointerup', _onUp);
     };
-  }, [isDraggingSplit]); // layout and wsName read from closure — stable enough
+  }, [isDraggingSplit]); // layoutRef always current — avoids stale closure
 
   // ── agent selection ─────────────────────────────────────────────
 
   const _handleSelectAgent = useCallback((uid) => {
     selectWorkspaceAgent(uid);
+    // Also wake the agent via agent-bus.
+    sendAgentCommand('@wake', uid).catch(() => {});
   }, []);
 
   // ── BNTP handlers ──────────────────────────────────────────────────
