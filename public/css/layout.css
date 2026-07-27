@@ -11,6 +11,10 @@
      grows to fit, .main grows, .app grows... cascading into a multi-hundred-
      thousand-pixel tall page. height:100vh caps the cascade. */
   transition: none;
+  /* Sprint 18 P1: contain:layout confines sidebar-width grid reflows to
+     the app-level box, preventing 1fr-column recalculation from cascading
+     into xterm WebGL resizes every frame during expand/collapse. */
+  contain: layout;
 }
 .app:has(.sidebar[data-collapsed="true"]) {
   grid-template-columns: var(--sidebar-w-collapsed) 1fr;

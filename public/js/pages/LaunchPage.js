@@ -9,6 +9,7 @@ import { config, folders, selectSession, selectTab } from '../state.js';
 import { createCli, createFolder, createRepo, refreshAll } from '../api.js';
 import { setToast } from '../toast.js';
 import { streamNewSession, resetProgress } from '../streaming.js';
+import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { PageTitleBar } from '../components/PageTitleBar.js';
 import { ProgressList } from '../components/ProgressList.js';
 import { Modal } from '../components/Modal.js';
@@ -391,7 +392,8 @@ function shortenPath(p) {
 }
 
 export function LaunchPage() {
-  return html`
+  return html`<${ErrorBoundary} name="LaunchPage">
     <${PageTitleBar} title=${T.launch.title} />
-    <${LaunchHero} />`;
+    <${LaunchHero} />
+  </${ErrorBoundary}>`;
 }

@@ -1,0 +1,14 @@
+{
+  "skills": {
+    "autoLoad": true,
+    "paths": [
+      "D:/AI IDE/CC_BOOS/claudes/全栈架构师_PM/.claude/skills"
+    ]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "effortLevel": "max",
+  "theme": "dark"
+}

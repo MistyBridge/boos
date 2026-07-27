@@ -1,41 +1,28 @@
 // VS Code-style terminal instance lifecycle for a single boos session.
 // Owns attach/detach, WebSocket transport, xterm input/output forwarding,
 // resize propagation, paste handling, and browser/mobile lifecycle hooks.
+//
+// Sprint 18 P0 (3-in-1):
+//   Task 2 — rAF output batching: WS frames coalesced per animation frame,
+//     single xterm.write() per rAF; atlas refresh guarded by output-idle check.
+//   Task 3 — Zero signal writes: Terminal code never touches Preact signals.
+//     agent_status frames dispatched via onAgentStatus callback.
 
 import { wsBase, getToken, getDeviceId, isRemoteAccess } from '../backend.js';
 import { TerminalResizeDebouncer } from './TerminalResizeDebouncer.js';
 import { XtermTerminal } from './XtermTerminal.js';
-import { workspaceAgentActivity, sessions } from '../state.js';
 
 const REMOTE_INPUT_FLUSH_MS = 12;
 
-// Forward agent_status WS frames to the workspace agent activity signal
-// AND the sessions list (so Sidebar dots reflect live activity).
-// Called from the onmessage handler inside TerminalInstance.
-function _handleAgentStatus(frame) {
-  if (!frame || !frame.sessionId) return;
-  // Update workspace canvas view signal.
-  const next = { ...workspaceAgentActivity.value, [frame.sessionId]: frame.activity };
-  workspaceAgentActivity.value = next;
-  // Also update the session's activity field so Sidebar tree-dot shows
-  // correct is-working animation. Session list uses s.activity, not
-  // workspaceAgentActivity (the two are independent signals).
-  const list = sessions.value;
-  const idx = list.findIndex((s) => s.id === frame.sessionId);
-  if (idx >= 0 && list[idx].activity !== frame.activity) {
-    const updated = [...list];
-    updated[idx] = { ...updated[idx], activity: frame.activity };
-    sessions.value = updated;
-  }
-}
-
 export class TerminalInstance {
-  constructor({ terminalId, cliType, onDisplaced, onReconnecting, onReconnected }) {
+  constructor({ terminalId, cliType, onDisplaced, onReconnecting, onReconnected,
+                onAgentStatus }) {
     this.terminalId = terminalId;
     this.cliType = cliType;
     this.onDisplaced = onDisplaced;
     this.onReconnecting = onReconnecting;
     this.onReconnected = onReconnected;
+    this.onAgentStatus = onAgentStatus;            // Task 3: callback, not signal
     this.xterm = new XtermTerminal();
     this.ws = null;
     this.host = null;
@@ -55,9 +42,14 @@ export class TerminalInstance {
     this.remoteAccess = isRemoteAccess();
     this.pendingInput = '';
     this.inputFlushTimer = null;
-    this.layoutRetryTimers = new Set();
     this.disposables = [];
     this.helperTextarea = null;
+
+    // ── Task 2: rAF output batching ──
+    this.outputBuffer = [];
+    this.outputRafScheduled = false;
+    this.lastOutputTime = 0;
+
     this.resizeDebouncer = new TerminalResizeDebouncer({
       isVisible: () => this.isVisible,
       getXterm: () => this.xterm,
@@ -66,7 +58,7 @@ export class TerminalInstance {
       resizeY: (rows) => this._applyResize(this.xterm.cols, rows),
     });
     const refreshDisposable = this.xterm.onDidRequestRefreshDimensions(() => {
-      this.scheduleLayout({ immediate: this.isVisible, retries: true });
+      this.scheduleLayout({ immediate: this.isVisible });
     });
     this.disposables.push(() => refreshDisposable.dispose());
   }
@@ -79,8 +71,15 @@ export class TerminalInstance {
     this._wireDomLifecycle();
     this.setVisible(this._isHostVisible());
     this._connect();
+
+    // ── Task 2: Atlas refresh with output-idle guard ──
+    // Skip WebGL glyph-atlas rebuilds while output is actively streaming
+    // (prevents texture-tear when forceRedraw clears atlas mid-frame).
+    this.xterm.startAtlasRefresh(30000, () => {
+      return (performance.now() - this.lastOutputTime) > 1000;
+    });
+
     if (this.isVisible) this.xterm.focus();
-    this.xterm.startAtlasRefresh(30000);
   }
 
   sendInput(data) {
@@ -118,7 +117,7 @@ export class TerminalInstance {
   }
 
   scheduleLayout(options = {}) {
-    const { immediate = false, retries = false, forceRedraw = false } =
+    const { immediate = false, forceRedraw = false } =
       typeof options === 'boolean' ? { immediate: options } : options;
     if (this.closedByUs) return null;
 
@@ -126,7 +125,6 @@ export class TerminalInstance {
       this._cancelScheduledLayout();
       const result = this.layout(undefined, undefined, true);
       if (forceRedraw) this.xterm.forceRedraw();
-      if (retries) this._scheduleLayoutRetries(forceRedraw);
       return result;
     }
 
@@ -137,7 +135,6 @@ export class TerminalInstance {
         if (forceRedraw) this.xterm.forceRedraw();
       });
     }
-    if (retries) this._scheduleLayoutRetries(forceRedraw);
     return null;
   }
 
@@ -149,20 +146,13 @@ export class TerminalInstance {
 
     if (nextVisible) {
       this.resizeDebouncer.flush();
-      this.scheduleLayout({ immediate: true, retries: true, forceRedraw: false });
-      // Tab switch → defer forceRedraw to a double-rAF so we hit a
-      // moment when WebGL rendering pipeline is idle (between frames).
-      // Debounce guard: cancel any previously scheduled forceRedraw to
-      // prevent race conditions with CSS transitions/grid reflows that
-      // would cause the WebGL canvas to tear.
+      this.scheduleLayout({ immediate: true, forceRedraw: false });
+      // Sprint 18 P1: single-rAF forceRedraw — independent Canvas (P0)
+      // eliminates the WebGL tear risk the old double-rAF was guarding
+      // against. One frame is enough for GPU pipeline idle now.
       if (didChange) {
-        if (this._forceRedrawRaf) cancelAnimationFrame(this._forceRedrawRaf);
-        if (this._forceRedrawRaf2) cancelAnimationFrame(this._forceRedrawRaf2);
-        this._forceRedrawRaf = requestAnimationFrame(() => {
-          this._forceRedrawRaf2 = requestAnimationFrame(() => {
-            this._forceRedrawRaf = this._forceRedrawRaf2 = null;
-            if (this.xterm && this.isVisible) this.xterm.forceRedraw();
-          });
+        requestAnimationFrame(() => {
+          if (this.xterm && this.isVisible) this.xterm.forceRedraw();
         });
       }
       if (this.pendingThemeRefresh) {
@@ -191,6 +181,10 @@ export class TerminalInstance {
     this.ws = null;
     this.helperTextarea = null;
     this.xterm.dispose();
+
+    // Task 2: drain pending output buffer
+    this.outputBuffer = [];
+    this.outputRafScheduled = false;
   }
 
   _connect() {
@@ -206,22 +200,73 @@ export class TerminalInstance {
       this.attempts = 0;
       this.onReconnecting?.(false);
       this.onReconnected?.();
-      this.scheduleLayout({ immediate: true, retries: true });
+      this.scheduleLayout({ immediate: true });
       this._sendResize(this.xterm.cols, this.xterm.rows, true);
     };
+
+    // ── Task 2: WS onmessage → buffer, not direct xterm.write ──
+    // ── Task 3: agent_status → callback, not signal ──
     ws.onmessage = (ev) => {
       let frame;
       try { frame = JSON.parse(ev.data); } catch { return; }
       if (frame.type === 'output') {
-        this._writeProcessData(frame.data, !!frame.replay);
+        this._bufferOutput(frame.data, !!frame.replay);
       } else if (frame.type === 'exit') {
         this.xterm.write(`\r\n\x1b[2m[进程已退出 · 退出码 ${frame.code}]\x1b[0m\r\n`);
       } else if (frame.type === 'agent_status') {
-        // Forward agent activity to workspace view signals.
-        _handleAgentStatus(frame);
+        // Task 3: dispatch via callback — zero Preact signal writes here
+        this.onAgentStatus?.(frame);
       }
     };
     ws.onclose = (ev) => this._handleClose(ev);
+  }
+
+  // ── Task 2: rAF output batching ──
+
+  /** Push WS output data into the rAF-batched buffer. */
+  _bufferOutput(data, replay) {
+    this.outputBuffer.push({ data, replay });
+    this._scheduleOutputFlush();
+  }
+
+  /** Schedule a single rAF flush if not already pending. */
+  _scheduleOutputFlush() {
+    if (this.outputRafScheduled) return;
+    this.outputRafScheduled = true;
+    requestAnimationFrame(() => {
+      this.outputRafScheduled = false;
+      this._flushOutputBuffer();
+    });
+  }
+
+  /** Flush all buffered output as a single xterm.write() call. */
+  _flushOutputBuffer() {
+    if (this.outputBuffer.length === 0) return;
+    this.lastOutputTime = performance.now();
+
+    const chunks = this.outputBuffer;
+    this.outputBuffer = [];
+
+    // Coalesce all data into one string — one write per animation frame.
+    let hasReplay = false;
+    const combined = chunks.map(c => {
+      if (c.replay) hasReplay = true;
+      return c.data;
+    }).join('');
+
+    if (hasReplay) {
+      this._beginReplay();
+      this.xterm.write(combined, () => {
+        this._endReplay();
+        // Re-layout after replay to accommodate dimension changes.
+        // Skip forceRedraw — atlas refresh handles glyphs on its own cadence.
+        if (this.isVisible) {
+          this.scheduleLayout({ immediate: true, forceRedraw: false });
+        }
+      });
+    } else {
+      this.xterm.write(combined);
+    }
   }
 
   _handleClose(ev) {
@@ -487,25 +532,6 @@ export class TerminalInstance {
     this._sendFrame({ type: 'resize', cols, rows });
   }
 
-  _writeProcessData(data, replay) {
-    if (!replay) {
-      this.xterm.write(data);
-      return;
-    }
-    this._beginReplay();
-    this.xterm.write(data, () => {
-      this._endReplay();
-      // Re-layout after replay to accommodate any dimension changes, but
-      // skip forceRedraw — the 30s atlasRefresh (startAtlasRefresh)
-      // picks up glyph corruption on its own cadence; a mid-stream
-      // forceRedraw here would clear the WebGL texture atlas while
-      // more output frames are arriving, causing visible tearing.
-      if (this.isVisible) {
-        this.scheduleLayout({ immediate: true, forceRedraw: false });
-      }
-    });
-  }
-
   _beginReplay() {
     this.replayDepth++;
     this.inReplay = true;
@@ -535,29 +561,11 @@ export class TerminalInstance {
     return { width: resolvedWidth, height: resolvedHeight };
   }
 
-  _scheduleLayoutRetries(forceRedraw = false) {
-    this._clearLayoutRetryTimers();
-    for (const delay of [60, 200]) {
-      const timer = setTimeout(() => {
-        this.layoutRetryTimers.delete(timer);
-        this.layout(undefined, undefined, true);
-        if (forceRedraw) this.xterm.forceRedraw();
-      }, delay);
-      this.layoutRetryTimers.add(timer);
-    }
-  }
-
   _cancelScheduledLayout() {
     if (this.pendingLayoutFrame !== null) {
       cancelAnimationFrame(this.pendingLayoutFrame);
       this.pendingLayoutFrame = null;
     }
-    this._clearLayoutRetryTimers();
-  }
-
-  _clearLayoutRetryTimers() {
-    for (const timer of this.layoutRetryTimers) clearTimeout(timer);
-    this.layoutRetryTimers.clear();
   }
 
   _isHostVisible() {

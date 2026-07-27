@@ -21,6 +21,7 @@ import {
 import { resumeSession, resumeSessionFromPicker, clearResumeFailure, deleteSession, setSessionTitle, switchSessionCli, stopSession, openSessionInEditor } from '../api.js';
 import { setToast } from '../toast.js';
 import { boosConfirm, boosPrompt } from '../dialog.js';
+import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { TerminalView } from '../components/TerminalView.js';
 import { PageTitleBar } from '../components/PageTitleBar.js';
 import { Popover } from '../components/Popover.js';
@@ -399,7 +400,7 @@ export function SessionsPage() {
     } catch (e) { setToast(e.message, 'error'); }
   };
 
-  return html`
+  return html`<${ErrorBoundary} name="SessionsPage">
     <${PageTitleBar} title=${html`
         <span class="session-title-text" title=${title}>${title}</span>
         <span class="session-title-cwd" title=${session.cwd}>${session.cwd}</span>
@@ -464,5 +465,6 @@ export function SessionsPage() {
             </div>`
           : null}
       </div>
-    </div>`;
+    </div>
+  </${ErrorBoundary}>`;
 }

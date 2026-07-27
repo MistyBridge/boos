@@ -1,6 +1,7 @@
 import { html } from '../html.js';
 import { serverHealth, installPrompt, isInstalledPwa } from '../state.js';
 import { setToast } from '../toast.js';
+import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { Card } from '../components/Card.js';
 import { PageTitleBar } from '../components/PageTitleBar.js';
 import { BrandMark, IconGithub, IconExternal } from '../icons.js';
@@ -43,7 +44,7 @@ function InstallCard() {
 export function AboutPage() {
   const version = serverHealth.value.version;
 
-  return html`
+  return html`<${ErrorBoundary} name="AboutPage">
     <${PageTitleBar} title=${T.about.title} />
     <${InstallCard} />
     <${Card} title="boos">
@@ -83,6 +84,7 @@ export function AboutPage() {
       </div>
     </${Card}>
     <p class="muted-text" style="margin-top: var(--s-3); text-align:center;">
-      需要升级控制？已移至 <strong>设置 → 通用 → 版本</strong>。
-    </p>`;
+    需要升级控制？已移至 <strong>设置 → 通用 → 版本</strong>。
+    </p>
+  </${ErrorBoundary}>`;
 }

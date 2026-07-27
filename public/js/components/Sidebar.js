@@ -24,6 +24,7 @@ import {
   IconSidebarToggle, IconPencil, IconClose, IconFolder, IconFolderOpen, IconPlus,
   IconTrash, IconRestore, IconTerminal, BrandMark, IconCanvas, IconDecisions, IconSettings, IconSparkle,
 } from '../icons.js';
+import { ErrorBoundary } from './ErrorBoundary.js';
 import { SearchBar, matchesFilter } from './SearchBar.js';
 import { FolderSettingsModal } from '../pages/ConfigurePage.js';
 
@@ -567,7 +568,7 @@ export function Sidebar() {
     el.addEventListener('pointercancel', up);
   };
 
-  return html`
+  return html`<${ErrorBoundary} name="Sidebar">
     <aside class="sidebar" data-collapsed=${collapsed ? 'true' : 'false'}>
       <div class="sidebar-top">
         <button class="sidebar-brand sidebar-brand-button"
@@ -633,5 +634,6 @@ export function Sidebar() {
           agents=${settingsFolderAgents.map((s) => ({ uid: s.id, name: s.title || s.id.slice(0, 12) }))}
           onClose=${() => setSettingsFolder(null)} />
       ` : null}
-    </aside>`;
+    </aside>
+  </${ErrorBoundary}>`;
 }

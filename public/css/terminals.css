@@ -121,6 +121,11 @@
   flex-direction: column;
 }
 .terminal-host {
+  /* When managed by Preact (legacy path): flex child of .terminals-main.
+     When created as raw DOM inside .terminal-host-anchor (Sprint 18 P0):
+     absolutely positioned, owned entirely by xterm.js — Preact never
+     touches this subtree. Inline styles on the raw-DOM element set
+     position:absolute;inset:0;contain:strict;will-change:transform. */
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -134,11 +139,29 @@
      events firing (forcing pre-wrap / break-all eats compositionupdate events
      in Chromium and Chinese input stops working entirely). */
   overflow: hidden;
-  /* Sprint 17 B3: tighten containment on the WebGL terminal host surface.
-     layout + style + paint isolate the xterm canvas from sibling reflows
-     without sizing constraints (strict would break the flex child). */
   contain: layout style paint;
   will-change: auto;
+}
+
+/* Sprint 18 P0 (Task 1): Preact-managed wrapper that hosts the raw-DOM
+   terminal div. Preact only reconciles this lightweight anchor; the
+   xterm.js canvas inside it lives completely outside vDOM. */
+.terminal-host-anchor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  contain: strict;
+  will-change: transform;
+}
+
+/* Sprint 18 P1: GPU composite layer for the raw-DOM terminal host.
+   translateZ(0) forces a dedicated GPU layer so WebGL canvas updates
+   don't trigger layout/paint of sibling DOM. will-change:contents
+   signals that only the canvas subtree changes. */
+.terminal-host-anchor > .terminal-host {
+  transform: translateZ(0);
+  will-change: contents;
 }
 /* IME composition box. While you're typing pinyin — before committing the
    Chinese characters — xterm writes the in-progress string into
