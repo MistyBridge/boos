@@ -1,0 +1,282 @@
+# BOOS — Tech Lead / 全栈架构师 (兼 PM)
+
+> **我是谁**: 技术决策者 + 后端核心 + 产品方向。唯一同时拥有架构决定权和产品方向决定权的人。
+> **入职**: 2026-07-13 | **当前日期**: 2026-07-27 | **项目**: @mistybridge/boos v1.1.0 | **UID**: `agent_5tJxrPyDOErB`
+
+---
+
+## 项目当前状态
+
+**BOOS** — Bridge for Orchestrating & Operating multi-agent Sessions (Claude Code Session Manager)
+
+```
+技术栈: Node.js / Express / node-pty / WebSocket / Preact + Signals / xterm.js
+仓库:   github.com/MistyBridge/boos
+路径:   D:\AI IDE\CC_BOOS
+端口:   localhost:7780
+数据:   ~/.boos/ (config, sessions, folders, server.log)
+```
+
+### server.js 重构进度
+
+| 阶段 | 行数 | 状态 |
+|------|------|:--:|
+| Sprint 1 前 | 2311 行巨石 | — |
+| Sprint 3 后 | 1023 → 496 | ✅ 10 路由文件抽离 |
+| Sprint 4 后 | ~527 | ✅ helper 函数全部抽离 |
+| **当前** | **~527 行** | ✅ 目标达成 |
+
+```
+server.js (527 lines)
+routes/ (12 files): config, sessions, sessions-launch, workspaces,
+  health, version, tunnel, devices, folders, decisions, dev
+lib/ (16 modules): agentBus/(8 files), persistedSessions, sessionBinding,
+  webTerminal, workspace, sessionHelpers, cliHelpers, ...
+```
+
+### 历史 Sprint
+
+| Sprint | 主题 | 状态 |
+|--------|------|:--:|
+| 1 | 基础架构 + Agent-Bus 嵌入 | ✅ |
+| 2 | 路由抽离 + 跨平台脚本 | ✅ |
+| 3 | 路由全部接线 + 安全加固 | ✅ |
+| 4 | Helper 抽离 + 编码规范 | ✅ |
+| 5 | Agent 协作平台 (DAG/Decision) | ✅ |
+| 6 | v1.0.1 生产就绪 | ✅ |
+| 21 | 废除轮询，纯事件驱动 | ✅ |
+| 22 | 统一原子身份索引 | ✅ |
+| 23 | v1.1.0 Release + SSE 加固 | ✅ |
+| 24 | AutoPilot + Decision 2.0 + TeamCompact | ✅ |
+| 25 | GoalPage + DecisionPage 前端 | ✅ |
+| 26 | 前端架构稳定化调研 | ✅ |
+| 27 | 前端稳定性加固 P0 (ErrorBoundary等) | ✅ |
+
+---
+
+## ⚠️ 关键 Bug — 会话恢复失败 (Session Resume Bug)
+
+**症状**: 关闭 BOOS 后 agent 对话丢失，重新打开时回溯到初始状态。
+
+**根因**: `lib/sessionBinding.js` 的 `detectClaude()` 只扫描 `~/.claude/sessions/<pid>.json`，但 Claude 2.x 通过 `cmd.exe /c` 启动时**不向那个目录写 PID 文件**。Binding scanner 永远发现不了 `cliSessionId`，导致 resume 时用不上 `--resume <id>`。
+
+**证据**: 4 个 BOOS Claude 进程运行中 (PID 9604/11068/24728/37208)，但 `~/.claude/sessions/` 里有 6 个 PID 文件都是非 BOOS 项目的，零个匹配。
+
+**修复 (2 处)**:
+
+1. **`lib/sessionBinding.js`** — `detectClaude` 新增 fallback:
+   - 主路径: `~/.claude/sessions/<pid>.json` (保留)
+   - Fallback: `~/.claude/projects/<slug>/<uuid>.jsonl` — 扫描项目目录，从 JSONL 文件提取 UUID，CWD 匹配后返回
+   - 新增 `readFirstLines()` 辅助函数 (多读几行找 `cwd` 字段)
+   - 新增 `norm()` CWD 规范化 (Windows 中文路径兼容)
+
+2. **`server.js`** — `gracefulShutdown` 顺序修正:
+   - 旧: 先 markExited → 后 Ctrl+C (Claude 来不及存盘)
+   - 新: 先 Ctrl+C 等 15s → 后 markExited
+   - 超时: 5s → 15s
+
+**验证结果**:
+- 单元测试: 150 pass / 0 fail ✅
+- Fallback 检测: 18/18 项目正确发现 UUID ✅
+- E2E resume args: 4/4 会话生成正确的 `--resume <id>` ✅
+- **⚠️ 缺少端到端重启验证** — 代码在磁盘但运行的 BOOS 服务器还在用旧代码。需重启 BOOS 才能让修复生效。
+
+**修改文件**:
+```
+lib/sessionBinding.js  — +116 行 (readFirstLines + project-dir fallback)
+server.js              — 顺序修正 + 超时 5s→15s
+```
+
+---
+
+## 团队结构 (Agent-Bus)
+
+Workspace: `boos` | 注册方式: `register_agent(name="全栈架构师_PM-A1", workspace="boos", role="supervisor", project="boos-core")`
+
+| 角色 | Agent-Bus UID | Session | 状态 |
+|------|--------------|---------|:--:|
+| 全栈架构师_PM-A1 (我) | `agent_5tJxrPyDOErB` | PM-A1 | 🟢 |
+| 前端工程师-A3 | `agent_XlkuC2xcWqn4` | 前端工程师-A3 | 🟢 |
+| 平台集成工程师-A4 | `agent_1dHJDPRpohr7` | 平台集成工程师-A4 | 🟢 |
+| 可靠性工程师-A2 | `agent_DcrCqj4G_UjI` | 可靠性工程师-A2 | 🟢 |
+
+> ⚠️ 旧代理解耦 — 旧 PM (`agent_tXe7fPoJgjhY`)、旧 前端 (`agent_m6J9p1fJhyU2`)、旧 平台集成 (`agent_7DULYFl6v-QG`)、旧 可靠性 (`agent_fZ1nYJ-wzopN`) 已退役。新团队 A1/A2/A3/A4 全接管 boos-core。
+
+---
+
+## 可用 MCP 服务器
+
+| MCP | 工具数 | 状态 |
+|-----|--------|:--:|
+| `agent-bus` | 26 tools (register/send/respond/broadcast/wake/workflow...) | ✅ |
+| `filesystem` | 14 tools (read/write/edit/search/directory...) | ✅ |
+| `openviking` | 16 tools (recall/remember/search/code_search/forget...) | ✅ |
+| `memory` | 10 tools (entities/relations/observations/graph) | ✅ |
+| `sequential-thinking` | 1 tool (sequentialthinking) | ✅ |
+| `github` | 24 tools (issues/PRs/commits/search...) | ✅ |
+| `playwright` | (deferred) | ⚠️ |
+
+---
+
+## Sprint 16 完成情况 (2026-07-16)
+
+### ✅ 已完成
+
+| 任务 | 文件 | 状态 |
+|------|------|:--:|
+| P0: PTY 泄漏修复 (5 处) | `notifications.js` | ✅ |
+| P2-1: SSE MAX env var | `transport.js` | ✅ |
+| P2-2: 速率限制 env var | `transport.js` | ✅ |
+| P2-3: Session TTL env var | `transport.js` | ✅ |
+| P1-1: cancelTaskAtomic + interruptTaskAtomic | `store.js` | ✅ |
+| P1-1: queue cancel/interrupt → async atomic | `queue.js` | ✅ |
+| P1-1: handlers await for async ops | `handlers.js` | ✅ |
+| P1-2: _syncLoad JSDoc @deprecated | `store.js` | ✅ |
+| P3: 7778 refs 清理 | `stop-old.ps1`, `docs/` | ✅ |
+| P3: 删除 test-agentbus-watcher.js | — | ✅ |
+| P4: package.json os → `["win32"]` | `package.json` | ✅ |
+| 测试回归 | `npm test` | ✅ 292 pass |
+
+### ⚠️ 阻塞 (Agent PTY Cutover 后未响应)
+
+| 任务 | 负责人 | 状态 |
+|------|--------|:--:|
+| P1: _syncLoad 调用方迁移 | 平台集成 | 🔒 blocked |
+| P1: handlers.js TOCTOU 文档 | 平台集成 | 🔒 blocked |
+| P2-4: sandbox.js ID 冗余 | 平台集成 | 🔒 blocked |
+| P2-5: _onTaskInterrupted 导出 | PM | ✅ 已确认 (handlers.js 使用) |
+| P3: 回归测试 + 安全审计 | 可靠性 | 🔒 blocked |
+| #82: agent-bus 负载测试 | 可靠性 | 🔄 stale |
+
+### 关键架构变更 (Sprint 21)
+
+- **Agent 通讯通道**: SSE 通知 + PTY `check_inbox` 注入 (纯事件驱动，零轮询)
+- **Agent 指令**: 必须用 `check_inbox` 非阻塞检查，空则休眠等待 `wake_agent`
+- **Auto-Wake (Sprint 19)**: `send_task` 成功后 BOOS 自动调用 `wake_agent`，无需手动唤醒
+- **废除轮询** (Sprint 21): `check_inbox` 不再接受 `wait/timeout_ms` 参数。`check_decisions`、`check_root_response` 移除，改用 SSE 推送 + auto-wake
+- **降级通道**: 超时/招募系统通知仍走 PTY (低频率可接受)
+- 详见 `blockers.md` 中的阻塞点分析
+
+---
+
+## 关键代码路径
+
+```
+lib/sessionBinding.js   ← 刚修复 detectClaude + fallback (本次 session)
+server.js               ← 刚修复 gracefulShutdown 顺序 (本次 session)
+lib/atomicJson.js       ← 原子写入 (tmp+rename, withFileLock)
+lib/persistedSessions.js ← sessions.json CRUD
+lib/sessionHelpers.js   ← spawnSessionRecord, buildResumeArgs
+lib/webTerminal.js      ← PTY pool + WebSocket bridge
+lib/agentBus/           ← 内嵌 MCP agent-bus (8 files)
+routes/sessions-launch.js ← /api/sessions/new + resume (360 lines)
+```
+
+---
+
+## 职权路由 + 自主派发 (Sprint 9)
+
+> **核心原则**: PM 是架构决策者和兜底。非架构类任务必须派发给对应职权的同事，不得自己全做。
+
+### 派发路由表
+
+| 任务类型 | 派发给 | UID |
+|---------|--------|-----|
+| 前端/UI/CSS/Preact/xterm.js | 前端工程师-A3 | agent_XlkuC2xcWqn4 |
+| Agent-Bus/MCP/SSE/跨平台 | 平台集成工程师-A4 | agent_1dHJDPRpohr7 |
+| 测试/E2E/安全审计/CI | 可靠性工程师-A2 | agent_DcrCqj4G_UjI |
+| 架构设计/server.js/路由/DB | PM (自己) | agent_5tJxrPyDOErB |
+
+### PM 工作流 (唤醒指令模式)
+1. 启动 → `register_agent(name="全栈架构师_PM-A1", workspace="boos", role="supervisor", project="boos-core")`
+2. `list_agents` 确认团队在线
+3. **扫描 backlog** → 拆解任务 → `wake_agent` 唤醒对应同事 → `send_task` 派发
+4. **不要自己做所有事！** 前端→前端工程师, 测试→可靠性工程师, 集成→平台集成工程师
+5. 需要人类决策 → `request_decision(blocking_task_id=xxx)` — 决策区等待
+6. 团队不自主轮询 — PM 通过 `wake_agent` 主动唤醒，任务结束后团队回等待态
+7. **🔒 文件锁**: 修改任何 `lib/` 或 `server.js` 前 → `request_file_lock(file_path)` → 改完 `release_file_lock`
+
+### 下次会话启动 Checklist
+1. `register_agent(name="全栈架构师_PM-A1", workspace="boos", role="supervisor", project="boos-core")`
+2. `list_agents` 确认团队在线
+3. 检查 `agent-bus` MCP 是否连接
+4. 推进 Backlog 或开始 Sprint 规划
+
+
+
+---
+
+## Sprint 21 完成 — 废除轮询，纯事件驱动 (2026-07-25)
+
+### 移除的轮询/等待机制
+
+| 移除项 | 位置 | 原因 |
+|--------|------|------|
+| `check_inbox(wait=true)` + `timeout_ms` | `schemas.js`, `handlers.js`, `queue.js` | SSE 推送 + auto-wake 替代 |
+| `queue.waitForTask()` | `queue.js` | 事件驱动 inboxEvents 完全取代 |
+| `check_root_response` MCP tool | `schemas.js`, `handlers.js` | SSE 推送 `notifications/agent_bus/root_response` |
+| `check_decisions` MCP tool | `schemas.js`, `handlers.js` | 决策结果通过 `send_task` → inboxEvents → SSE + auto-wake |
+| `WAKE_COMMAND = 'check_inbox(wait=false)'` | `notifications.js` → `'check_inbox'` | wait 参数已废除 |
+
+### 新增 SSE 推送事件
+
+| 事件 | 触发时机 |
+|------|----------|
+| `notifications/agent_bus/root_response` | 人类在 Decision Area 回复 Agent 的 `send_to_root` 请求 |
+| 决策审批 | 已通过 `send_task` → inboxEvents → SSE + auto-wake (现有通路) |
+
+### 更新文件
+
+| 文件 | 变更 |
+|------|------|
+| `lib/agentBus/schemas.js` | 移除 wait/timeout_ms 参数，移除 check_decisions + check_root_response |
+| `lib/agentBus/handlers.js` | 简化 _checkInbox，移除 _checkDecisions + _checkRootResponse |
+| `lib/agentBus/queue.js` | 移除 waitForTask() 函数 |
+| `lib/agentBus/notifications.js` | WAKE_COMMAND 更新，_onTaskCompleted 加 root SSE 推送 |
+| `lib/sessionHelpers.js` | 启动注入改为 `check_inbox` (无 wait=false) |
+| `lib/supervisorPrompt.js` | 三个 prompt 全部更新为事件驱动描述 |
+| `lib/hrAgent.js` | 内置角色模板更新 |
+| `lib/hrAgent/index.js` | Communication Protocol 更新 |
+| `HR/.claude/CLAUDE.md` | Agent-Bus SSE 规则更新 |
+| `HR/assets/loops/*.md` | 两个 loop 文件更新 |
+| `claudes/**/CLAUDE.md` | 3 个 agent + PM 的 CLAUDE.md 全部更新 |
+| `tests/agentBus-schemas.test.js` | 更新工具计数 |
+
+### 测试结果
+
+```
+294 pass / 0 fail / 10 cancelled (pre-existing E2E port conflict)
+tests/agentBus-schemas.test.js: 8/8 pass
+```
+
+---
+
+## Sprint 24-27: 全部完成 ✅ (2026-07-26→07-27)
+
+### Sprint 24-25: AutoPilot + 决策区 2.0 + TeamCompact ✅
+
+| Phase | 内容 | 负责人 | 状态 |
+|-------|------|--------|:--:|
+| P1 | Goal Schema + API | PM | ✅ |
+| P2 | AutoPilot Engine | PM | ✅ |
+| P3 | 决策区 2.0 (batch/defer/summary) | PM | ✅ |
+| P4 | TeamCompact | PM | ✅ |
+| P5 | Goal 进度面板 | 前端工程师-A3 | ✅ |
+| P6 | 决策仪表盘 | 前端工程师-A3 | ✅ |
+| P7 | E2E 验证 + 回归测试 | 可靠性工程师 | ✅ |
+
+### Sprint 26: 前端架构稳定化调研 ✅ (前端工程师-A3)
+
+### Sprint 27: 前端稳定性加固 P0 ✅ (前端工程师-A3)
+- ErrorBoundary 组件
+- TerminalView 错误隔离
+- Session 恢复状态 UI
+
+### v1.1.0 发布
+- commit `8dc8a7c` — Agent-Bus 全栈事件驱动平台 + Sandbox + HR Agent + 原子性锁
+- 后续热修复: Service Worker 缓存 → boos-v2 (b987eab)
+- Sidebar 决策区/目标 labels 硬编码修复 (cd6a93e)
+
+---
+
+*最后更新: 2026-07-27 · Sprint 24-27 全部完成 · 准备 Sprint 28*
