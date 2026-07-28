@@ -65,6 +65,8 @@ export const decisionSummary  = signal({ open: 0, urgent: 0, deferred: 0 });
 // Sprint 17 A4: agent-bus task stream for AgentTaskDashboard.
 export const tasks            = signal([]);              // task records from /api/agent-bus/tasks
 export const taskFilter       = signal({ status: 'all', sender: '', receiver: '' });
+// Sprint 32: DAG dashboard
+export const dagList          = signal([]);              // DAG list from /api/dags
 // Sprint 17 A6: supervisor-only feature gate. Set from /api/capabilities.
 export const isSupervisor     = signal(false);
 // Sprint 17 B1: dirty flag — set by SSE batch accumulator, cleared on flush.
@@ -148,6 +150,7 @@ export const TAB_HEADINGS = {
   workspace: T.sessions,
   decisions: T.decisions,
   goals:     T.goals,
+  dashboard: T.dashboard,
 };
 
 // ── persistence helpers (localStorage) ──────────────────────────

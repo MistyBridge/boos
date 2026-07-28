@@ -21,7 +21,7 @@ import { buildLaunchBodyFromState } from '../launchState.js';
 import {
   IconLaunch, IconConfigure, IconRemote, IconWorkspace,
   IconSidebarToggle, IconPencil, IconClose, IconFolder, IconFolderOpen, IconPlus,
-  IconTrash, IconRestore, IconTerminal, BrandMark, IconCanvas, IconDecisions, IconSettings, IconSparkle,
+  IconTrash, IconRestore, IconTerminal, BrandMark, IconCanvas, IconDecisions, IconSettings, IconSparkle, IconDashboard,
 } from '../icons.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { SearchBar, matchesFilter } from './SearchBar.js';
@@ -583,6 +583,7 @@ export function Sidebar() {
         <${NavItem} tab="decisions" icon=${html`<${IconDecisions} />`} label="决策区"
                    badge=${pendingDecisionCount.value} />
         <${NavItem} tab="goals"     icon=${html`<${IconSparkle} />`}   label="目标" />
+        <${NavItem} tab="dashboard" icon=${html`<${IconDashboard} />`} label="仪表盘" />
         ${!isRemoteAccess() ? html`
           <${NavItem} tab="remote"  icon=${html`<${IconRemote} />`}    label=${T.remote.title} />
         ` : null}

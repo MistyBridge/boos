@@ -21,6 +21,7 @@ import { RemotePage } from '../pages/RemotePage.js';
 import { AboutPage } from '../pages/AboutPage.js';
 import { DecisionPage } from '../pages/DecisionPage.js';
 import { GoalPage } from '../pages/GoalPage.js';
+import { DashboardPage } from '../pages/DashboardPage.js';
 
 function Panel({ name, children }) {
   const active = activeTab.value === name;
@@ -140,6 +141,7 @@ export function App() {
           ${tab === 'about'     ? html`<${Panel} name="about"><${AboutPage}     /></${Panel}>` : null}
           ${tab === 'decisions' ? html`<${Panel} name="decisions"><${DecisionPage} /></${Panel}>` : null}
           ${tab === 'goals'     ? html`<${Panel} name="goals"><${GoalPage} /></${Panel}>` : null}
+          ${tab === 'dashboard' ? html`<${Panel} name="dashboard"><${DashboardPage} /></${Panel}>` : null}
         </div>
       </main>
       <${Toast} />
