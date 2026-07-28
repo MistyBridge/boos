@@ -14,7 +14,6 @@ import { isRemoteAccess } from '../backend.js';
 import { boosPrompt, boosConfirm } from '../dialog.js';
 import { setToast } from '../toast.js';
 import { fmtAgo } from '../util.js';
-import { clockTick } from '../state.js';
 import { T } from '../i18n.js';
 import { useDragSort } from './useDragSort.js';
 import { streamNewSession } from '../streaming.js';
@@ -59,7 +58,6 @@ const reorderOverSessionId = signal(null);
 // is handled by FolderGroup's drop zone; same-folder reorder is handled
 // here: the row is a drop target when an in-folder sibling is dragged.
 function SessionRow({ s, folderId, siblingIds }) {
-  clockTick.value; // subscribe for fmtAgo refresh
   const isActive = activeSessionId.value === s.id;
   const running = s.status === 'running';
   const title = s.title || s.workspace || s.id.slice(0, 12);
@@ -176,12 +174,11 @@ function SessionRow({ s, folderId, siblingIds }) {
         <button class="tree-session-action" title=${T.sidebar.rename} onClick=${onRenameClick}><${IconPencil} /></button>
         <button class="tree-session-action" title=${T.sidebar.delete} onClick=${onDeleteClick}><${IconClose} /></button>
       </span>
-      <span class="tree-meta">${fmtAgo(s.lastActiveAt)}</span>
+      <span class="tree-meta"><time-ago datetime="${s.lastActiveAt}"></time-ago></span>
     </div>`;
 }
 
 function DeletedSessionRow({ s }) {
-  clockTick.value; // subscribe for fmtAgo refresh
   const title = s.title || s.workspace || s.id.slice(0, 12);
   const onRestoreClick = async (ev) => {
     ev.preventDefault();
@@ -485,7 +482,6 @@ function SessionTree({ onFolderSettings }) {
       ${(() => {
         const hr = hrAgentSession.value;
         if (!hr) return null;
-        clockTick.value; // subscribe for fmtAgo refresh
         const isActive = activeSessionId.value === hr.id;
         const running = hr.status === 'running';
         const onClick = async (ev) => {

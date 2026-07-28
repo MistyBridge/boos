@@ -181,13 +181,22 @@ function register(app, deps) {
             extraCliArgs: promptExtraArgs,
           });
 
-          // Sprint 13: update agent identity card after session launch.
+          // Sprint 30: update agent identity card after session launch.
+          // Best-effort match: try body.agentUid first, then cwd basename.
           try {
             const store = require('../lib/agentBus/store');
-            const allAgents = store.listAllAgents();
-            const matched = allAgents.find(a => require('path').basename(launchCwd || '') === a.name);
+            let matched = null;
+            // Prefer explicit agentUid from request body.
+            if (body.agentUid) {
+              matched = store.getAgent(body.agentUid);
+            }
+            // Fallback: match agent name against CWD basename.
+            if (!matched) {
+              const allAgents = store.listAllAgents();
+              matched = allAgents.find(a => require('path').basename(launchCwd || '') === a.name);
+            }
             if (matched) {
-              await store.upsertIdentity(matched.uid, {
+              await store.writeIdentity(matched.uid, {
                 boos_session_id: record.id, cwd: launchCwd,
                 pty_pid: launched?.pid || null, name: matched.name,
                 workspace: matched.workspace, role: matched.role || 'worker',

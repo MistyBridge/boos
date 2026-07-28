@@ -406,18 +406,17 @@
   background: var(--ink);
   flex: 0 0 8px;
   box-shadow: 0 0 0 0 rgba(26, 24, 21, 0.35);
-  animation: dirty-pulse 2s ease-in-out infinite;
+  /* Sprint 29: replaced infinite dirty-pulse with transition. */
+  transition: box-shadow 0.3s ease;
 }
 .dirty-banner .dirty-text { flex: 1; }
 
-/* Save button pulse — mirrors dirty banner */
+/* Save button pulse -- mirrors dirty banner */
 .action.primary.is-dirty {
-  animation: save-pulse 1.6s ease-in-out infinite;
+  /* Sprint 29: replaced infinite save-pulse with transition. */
+  transition: box-shadow 0.3s ease;
 }
-@keyframes save-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(26, 24, 21, 0.25); }
-  50%      { box-shadow: 0 0 0 4px rgba(26, 24, 21, 0); }
-}
+/* Sprint 29: @keyframes save-pulse removed. */
 
 /* HealthOverlay reuses .offline-overlay / .offline-card above. The
    only extra is the spinner shown during the "Checking…" phase — sized

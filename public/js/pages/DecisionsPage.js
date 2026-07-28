@@ -11,9 +11,6 @@ import { boosPrompt } from '../dialog.js';
 import { PageTitleBar } from '../components/PageTitleBar.js';
 import { AgentTaskDashboard } from '../components/AgentTaskDashboard.js';
 import { T } from '../i18n.js';
-import { fmtAgo } from '../util.js';
-import { clockTick } from '../state.js';
-
 const FILTER_TABS = [
   { key: 'open',    label: T.decisionsPage.open },
   { key: 'decided', label: T.decisionsPage.decided },
@@ -97,7 +94,7 @@ function DecisionCard({ d, onApprove, onReject, onReply, busy, isRead }) {
           <div class="decision-card-meta">
             <span>${T.decisionsPage.byAgent(d.agent_name || 'unknown')}</span>
             ${d.workspace ? html`<span> · ${T.decisionsPage.inWorkspace(d.workspace)}</span>` : null}
-            ${ts > 0 ? html`<span> · ${fmtAgo(ts)}</span>` : null}
+            ${ts > 0 ? html`<span> · <time-ago datetime="${ts}"></time-ago></span>` : null}
           </div>
         </div>
         <div class="decision-card-chevron">
@@ -231,7 +228,6 @@ const PAGE_TABS = [
 ];
 
 export function DecisionsPage() {
-  clockTick.value; // subscribe for fmtAgo refresh
   const [pageTab, setPageTab] = useState('decisions');
   const [filter, setFilter] = useState('open');
   const [busy, setBusy] = useState(false);

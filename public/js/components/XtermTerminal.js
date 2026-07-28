@@ -1,12 +1,18 @@
 // VS Code-style xterm wrapper. Owns the raw xterm.js terminal, renderer
 // addons, theme application, and fit/refresh behavior. It intentionally does
 // not know about boos sessions or WebSockets.
+//
+// Sprint 29: WebGL renderer replaced with CanvasRenderer (default). The WebGL
+// texture atlas caused visible glyph corruption ("花屏") on Windows when the
+// GPU let textures decay during idle periods. CanvasRenderer has no atlas —
+// each frame is a fresh raster, no corruption possible. Performance for PTY
+// terminal dimensions (≤200×50) is indistinguishable from WebGL.
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
-import { WebglAddon } from '@xterm/addon-webgl';
+import { SerializeAddon } from '@xterm/addon-serialize';
 import { isDarkTheme } from '../state.js';
 
 const DEFAULT_COLS = 80;
@@ -59,8 +65,7 @@ export class XtermTerminal {
     this.isMobile = window.matchMedia('(max-width: 640px)').matches;
     this.currentTheme = themeFor(isDarkTheme());
     this.fitAddon = new FitAddon();
-    this.webglAddon = null;
-    this.webglContextLossDisposable = null;
+    this.serializeAddon = new SerializeAddon();
     this.refreshDimensionListeners = new Set();
     this.resizeScrollState = null;
     this.resizeScrollStateTimer = null;
@@ -74,7 +79,7 @@ export class XtermTerminal {
       rows: lastKnownGridDimensions.rows,
       cursorBlink: true,
       cursorStyle: 'bar',
-      scrollback: 2000,    // Caps reflow cost on resize — higher values cause WebGL atlas rebuild tearing
+      scrollback: 2000,    // Caps reflow cost on resize
       allowProposedApi: true,
       theme: this.currentTheme,
       // Same modern keyboard protocols VS Code enables when configured.
@@ -87,6 +92,7 @@ export class XtermTerminal {
     this.raw.loadAddon(this.fitAddon);
     this.raw.loadAddon(new WebLinksAddon());
     this.raw.loadAddon(new ClipboardAddon());
+    this.raw.loadAddon(this.serializeAddon);
     this._installSelectionCopyGuard();
   }
 
@@ -103,12 +109,22 @@ export class XtermTerminal {
     this.host = host;
     this.raw.open(host);
     host.xterm = this.raw;
-    this._enableWebglRenderer();
     try {
       document.fonts?.ready?.then(() => {
         if (this.host === host) this._fireRequestRefreshDimensions();
       });
     } catch {}
+  }
+
+  /** Serialize terminal state for reconnection without xterm.reset(). */
+  serializeState() {
+    try { return this.serializeAddon.serialize(); } catch { return null; }
+  }
+
+  /** Restore serialized terminal state after reconnection. */
+  deserializeState(state) {
+    if (!state) return;
+    try { this.serializeAddon.deserialize(state); } catch {}
   }
 
   onDidRequestRefreshDimensions(listener) {
@@ -178,45 +194,6 @@ export class XtermTerminal {
     try { this.raw.refresh(0, this.raw.rows - 1); } catch {}
   }
 
-  clearTextureAtlas() {
-    try { this.raw.clearTextureAtlas?.(); } catch {}
-  }
-
-  forceRedraw() {
-    this.clearTextureAtlas();
-    this.refresh();
-  }
-
-  // Periodically clear the WebGL glyph texture atlas to prevent glyph
-  // corruption over long-running sessions. Uses requestIdleCallback
-  // (or fallback setTimeout) to avoid competing with CSS transitions
-  // and user input — atlas rebuilds only during browser idle periods.
-  //
-  // Sprint 18 P0: accepts optional `shouldRefresh` predicate. When
-  // provided, atlas rebuild is skipped unless the predicate returns
-  // true. TerminalInstance uses this to suppress rebuilds while output
-  // is actively streaming (prevents WebGL texture-tear).
-  startAtlasRefresh(intervalMs = 30000, shouldRefresh) {
-    if (this._atlasTimer) return;
-    const tick = () => {
-      if (this._atlasDisposed) return;
-      if (this.host?.isConnected) {
-        if (!shouldRefresh || shouldRefresh()) {
-          (typeof requestIdleCallback !== 'undefined'
-            ? requestIdleCallback
-            : (fn) => setTimeout(fn, 0))(() => this.forceRedraw());
-        }
-      }
-      this._atlasTimer = setTimeout(tick, intervalMs);
-    };
-    this._atlasTimer = setTimeout(tick, intervalMs);
-  }
-
-  stopAtlasRefresh() {
-    this._atlasDisposed = true;
-    if (this._atlasTimer) { clearTimeout(this._atlasTimer); this._atlasTimer = null; }
-  }
-
   write(data, callback) {
     try { this.raw.write(data, callback); } catch { callback?.(); }
   }
@@ -250,7 +227,6 @@ export class XtermTerminal {
   }
 
   dispose() {
-    if (this._atlasTimer) { clearInterval(this._atlasTimer); this._atlasTimer = null; }
     if (this.resizeScrollStateTimer) clearTimeout(this.resizeScrollStateTimer);
     this.resizeScrollState = null;
     this.resizeScrollStateTimer = null;
@@ -258,45 +234,8 @@ export class XtermTerminal {
       try { delete this.host.xterm; } catch { this.host.xterm = undefined; }
     }
     this.host = null;
-    this._disposeWebglRenderer(false);
     this.refreshDimensionListeners.clear();
     try { this.raw.dispose(); } catch {}
-  }
-
-  _shouldLoadWebgl() {
-    return !this.isMobile && XtermTerminal._suggestedRendererType !== 'dom';
-  }
-
-  _enableWebglRenderer() {
-    // Keep the current mobile guard: @xterm/addon-webgl@0.18 can mis-measure
-    // glyph atlases on fractional mobile DPRs.
-    if (!this.raw.element || !this._shouldLoadWebgl()) return;
-    this._disposeWebglRenderer(false);
-    try {
-      const webgl = new WebglAddon();
-      this.webglAddon = webgl;
-      this.webglContextLossDisposable = webgl.onContextLoss(() => {
-        console.warn('[boos] WebGL context lost, using DOM renderer');
-        this._disposeWebglRenderer();
-      });
-      this.raw.loadAddon(webgl);
-      this._fireRequestRefreshDimensions();
-    } catch (e) {
-      XtermTerminal._suggestedRendererType = 'dom';
-      this._disposeWebglRenderer(false);
-      console.warn('[boos] WebGL addon failed, using DOM renderer:', e);
-      this._fireRequestRefreshDimensions();
-    }
-  }
-
-  _disposeWebglRenderer(requestRefresh = true) {
-    try { this.webglContextLossDisposable?.dispose(); } catch {}
-    this.webglContextLossDisposable = null;
-    if (this.webglAddon) {
-      try { this.webglAddon.dispose(); } catch {}
-      this.webglAddon = null;
-    }
-    if (requestRefresh) this._fireRequestRefreshDimensions();
   }
 
   _fireRequestRefreshDimensions() {
@@ -432,5 +371,3 @@ export class XtermTerminal {
     return width > 0 ? width : SCROLLBAR_WIDTH_FALLBACK;
   }
 }
-
-XtermTerminal._suggestedRendererType = undefined;

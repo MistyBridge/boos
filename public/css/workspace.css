@@ -169,13 +169,11 @@
 }
 .agent-node.is-working .agent-node-status-dot {
   background: #4a8a4a;
-  animation: agent-pulse 1.5s ease-in-out infinite;
+  /* Sprint 29: replaced infinite agent-pulse keyframes with transition. */
+  transition: opacity 0.3s ease, box-shadow 0.3s ease;
 }
 
-@keyframes agent-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 138, 74, 0.4); }
-  50%      { opacity: 0.6; box-shadow: 0 0 0 6px rgba(74, 138, 74, 0); }
-}
+/* Sprint 29: @keyframes agent-pulse removed — replaced by transition above. */
 
 /* ── status: idle (gray) ────────────────────────────────────────── */
 .agent-node.is-idle {

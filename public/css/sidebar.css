@@ -135,12 +135,10 @@
   border-radius: 50%;
   background: var(--ink);
   box-shadow: 0 0 0 0 rgba(26, 24, 21, 0.30);
-  animation: dirty-pulse 2s ease-in-out infinite;
+  /* Sprint 29: replaced infinite dirty-pulse with transition. */
+  transition: box-shadow 0.3s ease;
 }
-@keyframes dirty-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(26, 24, 21, 0.22); }
-  50%      { box-shadow: 0 0 0 4px rgba(26, 24, 21, 0); }
-}
+/* Sprint 29: @keyframes dirty-pulse removed. */
 .sidebar[data-collapsed="true"] .nav-item.has-changes::after {
   right: auto;
   top: 6px;
@@ -817,7 +815,8 @@ body.is-resizing-sidebar * {
      background, not color), so we hardcode each state's halo color
      below. */
   box-shadow: 0 0 0 0 rgba(74, 138, 74, 0.55);
-  animation: tree-dot-breathe-idle 2.8s ease-in-out infinite;
+  /* Sprint 29: replaced infinite tree-dot-breathe-idle with transition. */
+  transition: opacity 0.4s ease, box-shadow 0.4s ease;
 }
 /* Working = CLI is actively writing to its transcript (i.e. thinking
    or printing tokens). Idle stays green + slow breathe; working flips
@@ -825,31 +824,13 @@ body.is-resizing-sidebar * {
 .tree-session.is-running.is-working .tree-dot::after {
   background: var(--blue, #4a73a5);
   box-shadow: 0 0 0 0 rgba(74, 115, 165, 0.65);
-  animation: tree-dot-breathe-working 1.4s ease-in-out infinite;
+  /* Sprint 29: tree-dot-breathe-working -> transition. */
+  transition: opacity 0.4s ease, box-shadow 0.4s ease;
 }
 
-@keyframes tree-dot-breathe-idle {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(74, 138, 74, 0.45);
-    opacity: 0.85;
-  }
-  50% {
-    box-shadow: 0 0 0 4px rgba(74, 138, 74, 0);
-    opacity: 1;
-  }
-}
-@keyframes tree-dot-breathe-working {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(74, 115, 165, 0.65);
-    opacity: 0.9;
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 5px rgba(74, 115, 165, 0);
-    opacity: 1;
-    transform: scale(1.15);
-  }
-}
+/* Sprint 29: @keyframes tree-dot-breathe-idle + tree-dot-breathe-working
+   removed — replaced by CSS transitions above. */
+
 /* Respect users who've asked for less motion — keep the color signal
    but drop the pulse. */
 @media (prefers-reduced-motion: reduce) {

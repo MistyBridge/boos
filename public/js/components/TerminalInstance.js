@@ -30,6 +30,7 @@ export class TerminalInstance {
     this.reconnectTimer = null;
     this.attempts = 0;
     this.everOpened = false;
+    this._savedState = null;     // Sprint 29: serialized terminal state for reconnect
     this.manuallyReconnecting = false;
     this.inReplay = false;
     this.replayDepth = 0;
@@ -72,13 +73,6 @@ export class TerminalInstance {
     this.setVisible(this._isHostVisible());
     this._connect();
 
-    // ── Task 2: Atlas refresh with output-idle guard ──
-    // Skip WebGL glyph-atlas rebuilds while output is actively streaming
-    // (prevents texture-tear when forceRedraw clears atlas mid-frame).
-    this.xterm.startAtlasRefresh(30000, () => {
-      return (performance.now() - this.lastOutputTime) > 1000;
-    });
-
     if (this.isVisible) this.xterm.focus();
   }
 
@@ -92,7 +86,7 @@ export class TerminalInstance {
 
   applyTheme() {
     this.xterm.applyResolvedTheme();
-    this.xterm.forceRedraw();
+    this.xterm.refresh();
     this._scheduleThemeRefreshForCli();
   }
 
@@ -117,22 +111,19 @@ export class TerminalInstance {
   }
 
   scheduleLayout(options = {}) {
-    const { immediate = false, forceRedraw = false } =
+    const { immediate = false } =
       typeof options === 'boolean' ? { immediate: options } : options;
     if (this.closedByUs) return null;
 
     if (immediate) {
       this._cancelScheduledLayout();
-      const result = this.layout(undefined, undefined, true);
-      if (forceRedraw) this.xterm.forceRedraw();
-      return result;
+      return this.layout(undefined, undefined, true);
     }
 
     if (this.pendingLayoutFrame === null) {
       this.pendingLayoutFrame = requestAnimationFrame(() => {
         this.pendingLayoutFrame = null;
         this.layout();
-        if (forceRedraw) this.xterm.forceRedraw();
       });
     }
     return null;
@@ -146,13 +137,12 @@ export class TerminalInstance {
 
     if (nextVisible) {
       this.resizeDebouncer.flush();
-      this.scheduleLayout({ immediate: true, forceRedraw: false });
-      // Sprint 18 P1: single-rAF forceRedraw — independent Canvas (P0)
-      // eliminates the WebGL tear risk the old double-rAF was guarding
-      // against. One frame is enough for GPU pipeline idle now.
+      this.scheduleLayout({ immediate: true });
+      // CanvasRenderer doesn't need a texture-atlas refresh — a single
+      // refresh() after the layout settles is enough.
       if (didChange) {
         requestAnimationFrame(() => {
-          if (this.xterm && this.isVisible) this.xterm.forceRedraw();
+          if (this.xterm && this.isVisible) this.xterm.refresh();
         });
       }
       if (this.pendingThemeRefresh) {
@@ -193,8 +183,13 @@ export class TerminalInstance {
     this.ws = ws;
 
     ws.onopen = () => {
-      if (this.everOpened) {
-        this.xterm.reset();
+      if (this.everOpened && this._savedState) {
+        // Sprint 29: restore serialized terminal state instead of
+        // xterm.reset() which destroyed all visible content. The
+        // serialize addon preserves scrollback + cursor + attributes
+        // so reconnection is invisible to the user.
+        this.xterm.deserializeState(this._savedState);
+        this._savedState = null;
       }
       this.everOpened = true;
       this.attempts = 0;
@@ -259,9 +254,9 @@ export class TerminalInstance {
       this.xterm.write(combined, () => {
         this._endReplay();
         // Re-layout after replay to accommodate dimension changes.
-        // Skip forceRedraw — atlas refresh handles glyphs on its own cadence.
+        // CanvasRenderer handles repaint natively — no texture atlas needed.
         if (this.isVisible) {
-          this.scheduleLayout({ immediate: true, forceRedraw: false });
+          this.scheduleLayout({ immediate: true });
         }
       });
     } else {
@@ -282,6 +277,12 @@ export class TerminalInstance {
       return;
     }
     this.attempts++;
+    // Sprint 29: serialize terminal state before reconnecting.
+    // This lets us restore the full scrollback + cursor + attributes
+    // when the WS reopens, avoiding the destructive xterm.reset().
+    if (!this._savedState) {
+      this._savedState = this.xterm.serializeState();
+    }
     // Exponential backoff: 1s → 2s → 4s → 8s → 16s → max 30s.
     const delay = Math.min(30000, 1000 * 2 ** Math.min(this.attempts - 1, 5));
     this.xterm.write('\r\n\x1b[2m[连接断开 · 正在重连…]\x1b[0m\r\n');
@@ -318,18 +319,21 @@ export class TerminalInstance {
 
   _wireDomLifecycle() {
     const host = this.host;
-    let resizeRafPending = false;
+    let resizeTimer = null;
     let latestResizeEntry = null;
+    const RESIZE_DEBOUNCE_MS = 100;
     const ro = new ResizeObserver((entries) => {
-      // Sprint 17 B2: rAF debounce — sidebar expand/collapse triggers a
-      // cascade of ResizeObserver → layout() → xterm.resize() which can
-      // fire a new resize event in the next micro-task, causing a loop.
-      // Coalesce into a single rAF per frame, using the latest dimensions.
+      // Sprint 29: 100ms debounce instead of rAF-per-frame. The sidebar
+      // CSS transition (250ms) previously triggered resize() on every
+      // rAF tick (~15 calls), causing visible terminal tearing. With
+      // 100ms debounce we get 2-3 resizes per transition — enough to
+      // track the animation smoothly without flooding xterm.
       latestResizeEntry = entries[0];
-      if (resizeRafPending) return;
-      resizeRafPending = true;
-      requestAnimationFrame(() => {
-        resizeRafPending = false;
+      // Skip entirely during sidebar drag — resize fires once on release.
+      if (document.body.classList.contains('is-resizing-sidebar')) return;
+      if (resizeTimer) return;
+      resizeTimer = setTimeout(() => {
+        resizeTimer = null;
         if (this.closedByUs) return;
         const entry = latestResizeEntry;
         latestResizeEntry = null;
@@ -339,7 +343,7 @@ export class TerminalInstance {
         } else {
           this.layout();
         }
-      });
+      }, RESIZE_DEBOUNCE_MS);
     });
     ro.observe(host);
     this.disposables.push(() => ro.disconnect());

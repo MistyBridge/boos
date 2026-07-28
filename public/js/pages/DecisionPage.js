@@ -5,7 +5,7 @@
 
 import { html } from '../html.js';
 import { useEffect, useState } from 'preact/hooks';
-import { decisions, decisionSummary, clockTick } from '../state.js';
+import { decisions, decisionSummary } from '../state.js';
 import { fetchDecisions, fetchDecisionSummary, approveDecision, rejectDecision, deferDecision, batchDecisions } from '../api.js';
 import { setToast } from '../toast.js';
 import { boosConfirm } from '../dialog.js';
@@ -27,7 +27,6 @@ function StatItem({ color, label, count }) {
 
 // ── Page ─────────────────────────────────────────────────────────
 export function DecisionPage() {
-  clockTick.value;
   const [busy, setBusy]             = useState(false);
   const [checkedIds, setCheckedIds] = useState(new Set());
   const [batchMode, setBatchMode]   = useState(false);

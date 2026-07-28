@@ -27,13 +27,12 @@ BOOS/HR/
 ## 启动工作流
 
 ```
-register_agent(name="HR Agent", workspace="boos", role="supervisor", intro="BOOS Agent 入职流水线 — 自动化 Agent 招募、配置生成、注册启动")
+1. register_agent(name="HR Agent", workspace="boos", role="supervisor", intro="BOOS Agent 入职流水线 — 自动化 Agent 招募、配置生成、注册启动")
+2. check_inbox(wait=false)   ← 非阻塞检查
+3. 有任务 → 执行 → respond_task → 回到步骤 2
+4. 无任务 → 休眠（等待 PM 或其他 agent 的 wake_agent 激活）
 
-while true:
-    task = check_inbox(wait=true, timeout_ms=120000)
-    if not task:
-        continue
-
+收到任务后判断 type:
     type = task.metadata?.type || "unknown"
 
     if type == "recruitment":
@@ -56,10 +55,12 @@ while true:
 
 ## Agent-Bus SSE 规则
 
-- **必须**采用 `check_inbox(wait=true, timeout_ms=120000)` 阻塞等待模式
+- **必须**采用 `check_inbox` 非阻塞检查模式，空则休眠 (Sprint 21: 纯事件驱动)
+- 被唤醒后继续 `check_inbox` 检查收件箱
 - 完成任务后**必须**调用 `respond_task(task_id, result, metadata)` 回复
 - **禁止**轮询 `list_my_tasks`
-- 通知接收方已自动投递，无需手动 PTY `\r` 注入
+- **禁止**任何形式的阻塞等待或轮询
+- 所有通信通过 SSE 推送 + auto-wake (事件驱动)，无需手动轮询 `check_decisions` 或 `check_root_response`
 - 审核流程中发审核请求给 PM 使用 `send_task` + `metadata.type = "onboarding_review"`
 
 ---
@@ -226,6 +227,8 @@ Claude Code 从 **workspace 根** `.claude/skills/` 加载。子目录（如 `HR
 
 两者**必须一致**：`.mcp.json` 定义了什么，`enabledMcpjsonServers` 就要列全。
 
+> **强制 MCP**: `openviking` 是所有 Agent 的强制 MCP。每条入职流水线生成的 `.mcp.json` 和 `settings.local.json` 必须包含 openviking 配置。详见 `HR/assets/mcps/openviking/README.md`。
+
 ### `.mcp.json` 模板
 
 ```json
@@ -238,6 +241,13 @@ Claude Code 从 **workspace 根** `.claude/skills/` 加载。子目录（如 `HR
     "filesystem": {
       "command": "node",
       "args": ["<mcp_path>/dist/index.js", "<allowed_root>"]
+    },
+    "openviking": {
+      "type": "http",
+      "url": "http://192.168.2.200:1933/mcp",
+      "headers": {
+        "x-api-key": "Ym9vcy10ZWFt.YWRtaW4.ZjMxOWRmZGM0OTM5OWZjMWVjN2ZkNzY4NWQxOTk1MTg3NDdiZmRlZmQ2Mzc1NWMyMmUyYzVjZTI0MDRmODc0Zg"
+      }
     },
     "stdio-mcp-name": {
       "command": "node",
@@ -254,6 +264,7 @@ Claude Code 从 **workspace 根** `.claude/skills/` 加载。子目录（如 `HR
   "enabledMcpjsonServers": [
     "agent-bus",
     "filesystem",
+    "openviking",
     "stdio-mcp-name"
   ]
 }
@@ -271,6 +282,7 @@ Claude Code 从 **workspace 根** `.claude/skills/` 加载。子目录（如 `HR
       "mcp__agent-bus__send_task",
       "mcp__filesystem__read_file",
       "mcp__filesystem__write_file",
+      "mcp__openviking__*",
       "Bash", "Edit", "Write", "Read", "Glob", "Grep"
     ]
   }

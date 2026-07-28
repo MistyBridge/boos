@@ -20,7 +20,8 @@
 | productivity | 1 | notion-mcp |
 | competition | 1 | kaggle-skill |
 | agent-bus | 1 | agent-bus (BOOS 自研) |
-| **合计** | **34** | |
+| memory-kb | 1 | openviking (自建知识库，强制加载) |
+| **合计** | **35** | |
 
 ---
 
@@ -89,6 +90,7 @@
 | productivity | **notion-mcp** | *(awaiting docs)* |
 | competition | **kaggle-skill** | `mcps/competition/kaggle-skill/` |
 | agent-bus | **agent-bus** (BOOS) | `mcps/agent-bus/` |
+| memory-kb | **openviking** (强制加载) | `mcps/openviking/` |
 
 ---
 

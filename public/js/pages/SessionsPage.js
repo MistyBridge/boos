@@ -16,7 +16,6 @@ import {
   setOpenSessionTabs,
   closeOpenSessionTab,
   clearActiveSession,
-  clockTick,
 } from '../state.js';
 import { resumeSession, resumeSessionFromPicker, clearResumeFailure, deleteSession, setSessionTitle, switchSessionCli, stopSession, openSessionInEditor } from '../api.js';
 import { setToast } from '../toast.js';
@@ -209,7 +208,6 @@ function SessionControls({ running, busy, onStop, onResume }) {
 }
 
 export function SessionsPage() {
-  clockTick.value; // resubscribe fmtAgo
   const id = activeSessionId.value;
   const list = sessions.value;
   const session = id ? list.find((s) => s.id === id) : null;

@@ -3,12 +3,9 @@
 // Supports batch mode checkbox selection.
 
 import { html } from '../html.js';
-import { fmtAgo } from '../util.js';
-import { clockTick } from '../state.js';
 import { T } from '../i18n.js';
 
 export function DecisionCard({ decision, onApprove, onReject, onDefer, busy, checked, onToggleCheck, showCheckbox }) {
-  clockTick.value;
   const { decision_id, title, agent_name, urgent, status, created_at } = decision;
   const isOpen = status === 'open';
   const ts = created_at ? new Date(created_at).getTime() : 0;
@@ -36,7 +33,7 @@ export function DecisionCard({ decision, onApprove, onReject, onDefer, busy, che
           </div>
           <div class="decision-card-meta">
             <span>${T.decisionsPage.byAgent(agent_name || 'unknown')}</span>
-            ${ts > 0 ? html`<span> · ${fmtAgo(ts)}</span>` : null}
+            ${ts > 0 ? html`<span> · <time-ago datetime="${ts}"></time-ago></span>` : null}
           </div>
         </div>
         ${isOpen ? html`

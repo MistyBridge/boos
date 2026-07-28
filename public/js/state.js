@@ -52,7 +52,8 @@ export const configDirty      = signal(false);
 // just toggles a key here; persistence is best-effort via localStorage
 // under `boos.fold.<key>` (set by toggleCardFold).
 export const cardFolded       = signal({});
-export const clockTick        = signal(Date.now());      // re-ticked each second so fmtAgo refreshes
+// Sprint 29: clockTick removed — replaced by <time-ago> custom element
+// that self-updates textContent every 30s without framework re-renders.
 export const lastRefreshAt    = signal(0);               // ms timestamp of last successful refreshAll()
 export const installPrompt    = signal(null);            // captured beforeinstallprompt event (PWA install)
 export const isInstalledPwa   = signal(false);           // running inside an installed PWA window

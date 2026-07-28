@@ -15,9 +15,6 @@ import { setToast } from '../toast.js';
 import { boosConfirm, boosPrompt } from '../dialog.js';
 import { IconCopy, IconRecycle, IconExternal, IconInfo, IconPencil, IconClose, IconCloudflareColor, IconMicrosoftColor } from '../icons.js';
 import { T } from '../i18n.js';
-import { fmtAgo } from '../util.js';
-import { clockTick } from '../state.js';
-
 function genToken() {
   const a = new Uint8Array(18);
   crypto.getRandomValues(a);
@@ -56,7 +53,6 @@ function Section({ title, meta, children }) {
 }
 
 function DeviceRow({ d, kind, onApprove, onReject, onRevoke, onRename, onDelete }) {
-  const lastSeen = d.lastSeen ? fmtAgo(d.lastSeen) : '—';
   const ipShort = d.ip ? d.ip.split(',')[0].trim() : null;
   return html`
     <div class=${`remote-device is-${kind}`}>
@@ -70,7 +66,7 @@ function DeviceRow({ d, kind, onApprove, onReject, onRevoke, onRename, onDelete 
         </div>
         <div class="remote-device-meta">
           ${ipShort ? html`<span class="mono">${ipShort}</span> · ` : null}
-          <span>活跃于 ${lastSeen}</span>
+          <span>活跃于 ${d.lastSeen ? html`<time-ago datetime="${d.lastSeen}"></time-ago>` : '—'}</span>
           ${d.userAgent ? html` · <span class="remote-device-ua" title=${d.userAgent}>${d.userAgent.slice(0, 60)}${d.userAgent.length > 60 ? '…' : ''}</span>` : null}
         </div>
       </div>
@@ -287,7 +283,6 @@ function DevtunnelLoginPanel({ login, onCancel, onDismiss, onRetry }) {
 }
 
 export function RemotePage() {
-  clockTick.value; // re-tick fmtAgo "last seen" labels
   // Hydrate from a localStorage cache so the page renders the same
   // shape it had at the end of the previous visit — provider tiles,
   // signed-in state, tunnel id, share URL — instead of empty / placeholder

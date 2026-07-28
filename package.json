@@ -37,6 +37,7 @@
   "dependencies": {
     "@modelcontextprotocol/server-memory": "^2026.7.4",
     "@modelcontextprotocol/server-sequential-thinking": "^2026.7.4",
+    "@xterm/addon-serialize": "^0.14.0",
     "express": "^4.21.2",
     "pg": "^8.22.0"
   },

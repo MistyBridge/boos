@@ -127,8 +127,10 @@ function register(app, { asyncH }) {
     const workspace = String(body.workspace || '').trim();
     const urgency = (String(body.urgency || '').toLowerCase() === 'urgent') ? 'urgent' : 'normal';
 
+    // Sprint 30: prefer uid as canonical index. name+workspace is a
+    // deprecated fallback kept for backward compatibility.
     if (!uid && (!name || !workspace)) {
-      return res.status(400).json({ error: 'uid or name+workspace pair required' });
+      return res.status(400).json({ error: 'uid required (name+workspace is deprecated)' });
     }
     if (body.urgency && !['normal', 'urgent'].includes(String(body.urgency).toLowerCase())) {
       return res.status(400).json({ error: 'urgency must be "normal" or "urgent"' });
@@ -276,7 +278,7 @@ function register(app, { asyncH }) {
         role: agent.role || 'worker',
         capabilities: agent.capabilities || [],
         online,
-        session_id: sid || null,
+        boos_session_id: sid || null,
         session_status: session ? session.status : null,
         pty_info: ptyInfo,
         pending_tasks: pendingTasks,
