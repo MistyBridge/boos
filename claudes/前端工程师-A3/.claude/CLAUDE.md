@@ -27,7 +27,7 @@
 |------|------|
 | Preact + Signals | 细粒度响应式 UI（`state.js` 30+ signals） |
 | htm | JSX-free 模板（`html.js` 提供 `html` tagged template） |
-| xterm.js 5.5 + WebGL | 终端模拟器（fit/webgl/unicode addons） |
+| xterm.js 5.5 + CanvasRenderer | 终端模拟器（fit/canvas/unicode/serialize addons） |
 | CSS Custom Properties | Design Tokens 体系（`tokens.css`） |
 | Pointer Events API | 拖拽/缩放/resize（`useDragSort.js`） |
 | WebSocket | 终端数据流（`/ws/terminal/:id`） |
@@ -93,7 +93,7 @@
 | `AboutPage.js` | 版本信息 + 升级 | about |
 | `RemotePage.js` | 远程隧道 / 设备管理（仅 loopback） | remote |
 
-### 组件（36 个）
+### 组件（37 个）
 
 **核心架构：**
 `App.js` · `Sidebar.js` · `ErrorBoundary.js` · `OfflineBanner.js`
@@ -109,6 +109,9 @@
 
 **UI 通用：**
 `Card.js` · `Modal.js` · `Popover.js` · `Picker.js` · `EntityFormModal.js` · `DialogHost.js` · `Toast.js` · `ServerStatus.js` · `PageTitleBar.js` · `SearchBar.js` · `DecisionCard.js`
+
+**Web Components：**
+`TimeAgo.js`（`<time-ago>` 自定义元素，30s 自管理更新，零框架开销）
 
 **工具/覆盖层：**
 `HealthOverlay.js` · `PendingApprovalOverlay.js` · `RestartOverlay.js` · `KeybindingRecorder.js` · `MobileNavFab.js` · `useDragSort.js`
@@ -203,16 +206,17 @@ TerminalView (Preact 组件，管理生命周期)
   └── TerminalHostAnchor (Preact ref → DOM 挂载点)
       └── TerminalHost (raw DOM，完全绕过 Preact vDOM)
           └── XtermTerminal (class 实例，非 Preact)
-              ├── xterm.js 5.5 Terminal (WebGL renderer)
-              ├── fit addon (ResizeObserver → 自动 fit)
+              ├── xterm.js 5.5 Terminal (CanvasRenderer，无 WebGL)
+              ├── SerializeAddon (serialize/deserialize 替代 reset)
+              ├── fit addon (ResizeObserver 100ms debounce)
               ├── unicode addon (宽字符支持)
               ├── WebSocket → /ws/terminal/:id → node-pty
-              └── 双 rAF forceRedraw debounce (防 WebGL 纹理撕裂)
+              └── scrollback=2000，sidebar 拖拽时跳过 resize
 ```
 
 **关键约束**：终端 DOM 操作绕过 Preact vDOM — 直接操作真实 DOM 以避免 xterm.js 与虚拟 DOM 冲突。
 
-## 当前状态（2026-07-27）
+## 当前状态（2026-07-28）
 
 ### 已交付
 
@@ -220,26 +224,32 @@ TerminalView (Preact 组件，管理生命周期)
 |--------|------|------|
 | P0 UI 闪烁修复（5 文件） | ✅ | 2026-07-21 |
 | Sprint 26 前端架构调研 | ✅ | 2026-07-27 |
+| Sprint 27 稳定性加固 — ErrorBoundary + SW + E2E | ✅ | 2026-07-27 |
 | ErrorBoundary 组件 | ✅ | 已存在 |
 | SW stale-while-revalidate | ✅ | 已迁移（CACHE_NAME=`boos-dynamic-v1`） |
 | GoalPage + DecisionPage | ✅ | Sprint 24-25 |
 | AgentCanvas + AgentNode | ✅ | Sprint 24-25 |
+| Sprint 29 clockTick 移除 + `<time-ago>` 自定义元素 | ✅ | 2026-07-28 |
+| Sprint 29 xterm.js CanvasRenderer + SerializeAddon | ✅ | 2026-07-28 |
+| Sprint 29 CSS 动画清理（5 个 @keyframes → transition） | ✅ | 2026-07-28 |
+| Sprint 31 编码规范确认（单文件 ≤500 行） | ✅ | 2026-07-28 |
 
 ### 已知问题（按优先级）
 
 | 优先级 | 问题 | 位置 | 状态 |
 |--------|------|------|------|
-| ~~P0~~ | ~~ErrorBoundary~~ | 全局 | ✅ 已修复 |
-| ~~P0~~ | ~~SW cache-first~~ | sw.js | ✅ 已迁移 swr |
+| ~~P0~~ | ~~ErrorBoundary~~ | 全局 | ✅ Sprint 27 |
+| ~~P0~~ | ~~SW cache-first~~ | sw.js | ✅ Sprint 27 |
+| ~~P1~~ | ~~xterm.js WebGL 纹理撕裂~~ | XtermTerminal.js | ✅ Sprint 29 CanvasRenderer |
+| ~~P1~~ | ~~clockTick 全量重渲染~~ | state.js | ✅ Sprint 29 `<time-ago>` |
 | P0 | 零测试覆盖 | 全局 | ❌ 待处理 |
 | P1 | CSS `contain: strict` 卡片塌陷 | cards.css:224-228 | ❌ 已知定位 |
-| P1 | xterm.js scrollback=5000 resize 撕裂 | XtermTerminal.js | ❌ 已有 debounce |
 | P1 | API 缺少统一超时 | api.js | ❌ 仅 pollHealth 有 |
 | P1 | SSE 无指数退避重连 | main.js | ❌ |
 | P1 | 无错误上报/性能监控 | 全局 | ❌ |
 | P2 | 16 CSS 文件考虑合并 | public/css/ | 💡 PostCSS |
 | P2 | 缺少 JSDoc 类型注解 | 全局 | 💡 |
-
+| P2 | 12 个文件超标（Sprint 31 ≤500 行规范） | 见下方列表 | 📋 待排期 |
 ## 编码规范
 
 ### 组件模式
@@ -277,11 +287,23 @@ export function MyComponent({ prop1, prop2 }) {
 - 不使用 emoji（SVG 图标替代）
 - 数字使用 `tabular-nums`
 
-### 文件大小
+### 文件大小（Sprint 31 强制执行）
 
-- 页面 ≤ 300 行（除非有充分理由）
-- 组件 ≤ 200 行
-- CSS 合理分段，避免单文件过度膨胀
+- 单文件 ≤ **500 行**（硬性上限）
+- 超标文件按领域内聚拆分，非机械按行切割
+- 主模块作为 facade 重新导出子模块，保持 API 向后兼容
+- 新增文件一律遵循此标准，超标不得提交
+
+**前端超标文件清单（待排期）：**
+
+| JS 文件 | 行数 | CSS 文件 | 行数 |
+|---------|------|----------|------|
+| ConfigurePage.js | 1069 | widgets.css | 2344 |
+| RemotePage.js | 738 | sidebar.css | 941 |
+| i18n.js | 732 | terminals.css | 879 |
+| api.js | 671 | cards.css | 820 |
+| Sidebar.js | 635 | feedback.css | 534 |
+| TerminalInstance.js | 592 | forms.css | 502 |
 
 ## 可用 MCP 服务器
 
@@ -322,11 +344,11 @@ export function MyComponent({ prop1, prop2 }) {
 
 | 领域 | 负责人 | UID |
 |------|--------|-----|
-| 后端/API/server.js | 全栈架构师(PM) | agent_tXe7fPoJgjhY |
-| 数据库/PostgreSQL | 全栈架构师(PM) | agent_tXe7fPoJgjhY |
-| Agent-Bus/MCP/协议 | 平台集成工程师 | agent_7DULYFl6v-QG |
-| 测试/E2E/安全审计 | 可靠性工程师 | agent_fZ1nYJ-wzopN |
-| 跨平台/CI/部署 | 平台集成工程师 | agent_7DULYFl6v-QG |
+| 后端/API/server.js | 全栈架构师_PM-A1 (PM) | agent_5tJxrPyDOErB |
+| 数据库/PostgreSQL | 全栈架构师_PM-A1 (PM) | agent_5tJxrPyDOErB |
+| Agent-Bus/MCP/协议 | 平台集成工程师-A4 | agent_1dHJDPRpohr7 |
+| 测试/E2E/安全审计 | 可靠性工程师-A2 | agent_DcrCqj4G_UjI |
+| 跨平台/CI/部署 | 平台集成工程师-A4 | agent_1dHJDPRpohr7 |
 
 **职权区间（只做这些）**: frontend, preact, xterm.js, css, UI, ux, PWA, WebSocket 终端
 
