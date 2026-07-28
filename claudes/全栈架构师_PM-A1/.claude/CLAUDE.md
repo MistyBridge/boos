@@ -1,7 +1,7 @@
 # BOOS — Tech Lead / 全栈架构师 (兼 PM)
 
 > **我是谁**: 技术决策者 + 后端核心 + 产品方向。唯一同时拥有架构决定权和产品方向决定权的人。
-> **入职**: 2026-07-13 | **当前日期**: 2026-07-27 | **项目**: @mistybridge/boos v1.1.0 | **UID**: `agent_5tJxrPyDOErB`
+> **入职**: 2026-07-13 | **当前日期**: 2026-07-28 | **项目**: @mistybridge/boos v1.2.0-dev | **UID**: `agent_5tJxrPyDOErB`
 
 ---
 
@@ -318,4 +318,42 @@ tests/agentBus-schemas.test.js: 8/8 pass
 
 ---
 
-*最后更新: 2026-07-27 · Sprint 24-27 全部完成 · 准备 Sprint 28*
+---
+
+## Sprint 31: DAG 任务系统 ✅ (2026-07-27→07-28)
+
+| Phase | 内容 | 负责人 | 状态 |
+|-------|------|--------|:--:|
+| P1 | DAG 数据层 (dagStore.js, 415 lines) | PM | ✅ |
+| P2 | 任务状态机 (taskSystem.js, 231 lines) + 15 MCP tools | PM | ✅ |
+| P3 | DAG 引擎 (dagEngine.js, 239 lines) | PM | ✅ |
+| P4 | PMO 引擎 (pmoEngine.js, 212 lines) | PM | ✅ |
+| P5 | 决策升级链 (PM CLAUDE.md) | PM | ✅ |
+| P6 | Sleep/Wake 管理器 (sleepManager.js, 207 lines) | PM | ✅ |
+| P7 | DAG 测试 (50 tests) | PM + A2 | ✅ |
+| — | 代码重构 ≤500行规范 (7→18 files) | PM | ✅ |
+| — | wake_agent 权限修复 (全员可 wake) | PM | ✅ |
+| — | 旧 agent 清理 (8 legacy deregistered) | PM | ✅ |
+
+**测试**: 50/50 pass (dag-store 31 + task-system 19)
+**E2E 验证**: 创建→激活→提交→审批→级联→拒绝×3→升级 ✅
+
+---
+
+## Sprint 32: 稳定化 + 前端仪表盘 (2026-07-28)
+
+| Phase | 内容 | 负责人 | 状态 |
+|-------|------|--------|:--:|
+| P1 | 文件写权限系统 (已有 fileLock.js) | PM | ✅ |
+| P2 | PMO Agent 注册 (claudes/PMO/) | PM | ✅ |
+| P3 | 前端 DAG 仪表盘 | A3 | 📤 `task_ms47zr4o` |
+| P4 | BOOS 重启验证 (让代码生效) | — | ⏳ |
+
+### ⚠️ 待重启
+
+BOOS 服务器仍运行旧代码。需重启 BOOS 让 Sprint 31-32 变更生效：
+- `store._syncLoad` 在旧代码中未导出 → MCP dag_status 报错
+- pmoEngine / sleepManager 未加载
+- wake_agent 权限修复未生效
+
+*最后更新: 2026-07-28 · Sprint 31 完成 · Sprint 32 进行中*
