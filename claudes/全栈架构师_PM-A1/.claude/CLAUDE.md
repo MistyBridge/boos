@@ -159,6 +159,45 @@ Workspace: `boos` | 注册方式: `register_agent(name="全栈架构师_PM-A1", 
 
 ---
 
+## 决策升级链 (Decision Escalation Chain) — Sprint 31
+
+> **核心原则**: 优先请求人类决策，而非盲猜。当 agent 无法自行判断时，通过三级升级链逐级上报。
+
+### 三级升级
+
+| 级别 | 角色 | 触发条件 | 超时 | 失败行为 |
+|------|------|----------|------|----------|
+| 1 | Agent (执行者) | 任务 reject 3 次 | — | `dag_reject_task` → 自动 `escalated` 状态 |
+| 2 | **PM (我)** | 收到 escalated 任务 | 30 min | 判断后 → 决策或升级到 PMO |
+| 3 | PMO | PM 无法决策或超时 | 30 min | → `request_decision` 升级到人类决策区 |
+| 4 | 人类决策区 | PMO 升级或紧急决策 | — | 人类通过 Decision Area UI 回复 |
+
+### PM 处理 escalated 任务的决策流程
+
+```
+收到 escalated task
+  ├─ 问题明确 + 有决策权 → 直接决策 (reassign/cancel/修改要求)
+  ├─ 问题明确 + 超出职权 → 升级到 PMO
+  └─ 信息不足 → request_decision 升级到人类决策区
+```
+
+### 强制规则
+
+1. **不盲猜**: agent 无法判断时，**必须**升级而非假设
+2. **超时兜底**: 30 分钟内未处理 → 自动升级到下一级
+3. **锁定任务**: escalated task 的 `blocking_task_id` 关联 DAG 任务，决策前任务保持 blocked
+4. **决策记录**: 所有 PM 决策写入 `~/.boos/decisions/CLOSED/` 供审计
+
+### PM 检查 escalated 任务
+
+```javascript
+// 定期或 pmo_poll 时执行
+const dagStore = require('./lib/agentBus/dagStore');
+const tasks = dagStore.getTasksByStatus(dagId, 'escalated');
+```
+
+---
+
 ## 关键代码路径
 
 ```
