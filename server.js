@@ -43,76 +43,20 @@ const { createScanner } = require('./lib/sessionBinding');
 const { openInBrowser: _openBrowserRaw } = require('./lib/browserLauncher');
 const openInBrowser = (url) => _openBrowserRaw(url, DATA_DIR);
 
-// One unified exit path: kill PTY children, then exit. v1.0 dropped the
-// snapshot-on-exit behaviour because the new persistedSessions store is
-// the source of truth (and is always on disk, not in memory).
+// Lifecycle extracted to lib/serverLifecycle.js (Sprint 31 — ≤500 lines).
 
-// ── Runtime port lock ────────────────────────────────────────────────
-// Written on startup so external tools (start.bat, Claude Code, CI
-// scripts) can discover the actual bound port + MCP URL. Deleted on
-// graceful shutdown.
-const PORT_LOCK_PATH = path.join(DATA_DIR, 'port.lock');
+const {
+  gracefulShutdown: _gracefulShutdown,
+  reclaimPortFromOldInstance,
+  reconcileSessionsOnBoot,
+  PORT_LOCK_PATH,
+} = require('./lib/serverLifecycle');
 
-function isPidDead(pid) {
-  if (!pid) return true;
-  try { process.kill(pid, 0); return false; }
-  catch (e) { return e.code === 'ESRCH'; }
-}
-
-let shuttingDown = false;
-async function gracefulShutdown(reason) {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`[boos] shutting down · ${reason}`);
-
-  // Delete port.lock so external tools know this instance is gone.
-  try { require('node:fs').unlinkSync(PORT_LOCK_PATH); } catch {}
-
-  // 1. Send Ctrl+C to every PTY and wait for natural exit (up to 15s) so CLI
-  //    processes can flush session state to disk. Order matters: kill FIRST,
-  //    then mark exited — reversing this causes the CLI's onExit callback to
-  //    run after we already wrote status:'exited', which is harmless, but the
-  //    real goal is giving the CLI time to save state before this function
-  //    calls process.exit.
-  try {
-    await webTerminal.gracefulKillAll(15000);
-  } catch {}
-  // 2. Save active session list for auto-resume on next boot (Sprint 17 C1).
-  try {
-    const all = await persistedSessions.loadAll();
-    const activeIds = all.filter((s) => s.status === 'running').map((s) => s.id);
-    const fs = require('node:fs');
-    const path = require('node:path');
-    const AUTO_RESUME_PATH = path.join(DATA_DIR, 'active-sessions.json');
-    if (activeIds.length > 0) {
-      fs.writeFileSync(AUTO_RESUME_PATH, JSON.stringify({ ids: activeIds, savedAt: new Date().toISOString() }));
-      console.log(`[boos] saved ${activeIds.length} active session(s) for auto-resume`);
-    }
-  } catch {}
-
-  // 3. Mark all running sessions as exited so the next launch doesn't show
-  //    stale "running" rows.
-  try {
-    const all = await persistedSessions.loadAll();
-    for (const s of all) {
-      if (s.status === 'running') {
-        await persistedSessions.markExited(s.id, null).catch(() => {});
-      }
-    }
-  } catch {}
-  // 3. Stop PostgreSQL container (Sprint 7).
-  try {
-    await require('./lib/postgres').stopContainer();
-  } catch {}
-  // 4. Stop archive periodic prune (Sprint 9).
-  try {
-    require('./lib/archive').stopPeriodicPrune();
-  } catch {}
-  try {
-    tunnel.stop();
-  } catch {}
-  process.exit(0);
-}
+// Wrapper that bakes in server.js dependencies so callers can use the
+// simple `gracefulShutdown(reason)` signature.
+const gracefulShutdown = (reason) => _gracefulShutdown(reason, {
+  webTerminal, persistedSessions, DATA_DIR, tunnel,
+});
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -353,122 +297,11 @@ function listenWithFallback(preferred) {
   });
 }
 
-// ---- 启动前清理旧实例 (Sprint 17: 彻底解决端口冲突) ----
-async function reclaimPortFromOldInstance(preferredPort) {
-  const fs = require('node:fs');
-  const http = require('node:http');
-  let oldPort = null;
-  let oldPid = null;
-
-  try {
-    const existingRaw = fs.readFileSync(PORT_LOCK_PATH, 'utf-8');
-    const existing = JSON.parse(existingRaw);
-    if (existing.pid && existing.port && !isPidDead(existing.pid)) {
-      oldPort = existing.port;
-      oldPid = existing.pid;
-    }
-  } catch { /* port.lock 不存在或解析失败 */ }
-
-  // 即使 port.lock 不存在，也要检查端口是否被占用
-  // (旧实例可能已删除 port.lock 但仍在退出中)
-  if (!oldPort) {
-    const portInUse = await new Promise((resolve) => {
-      const test = http.createServer();
-      test.once('error', () => resolve(true));
-      test.once('listening', () => { test.close(); resolve(false); });
-      test.listen(preferredPort, '127.0.0.1');
-    });
-    if (portInUse) {
-      oldPort = preferredPort;
-      console.log(`[boos] 端口 ${preferredPort} 已被占用 — 尝试探测占用进程...`);
-      // 尝试通过端口查找占用进程的 PID (Windows: netstat, Unix: lsof)
-      try {
-        const { execSync } = require('node:child_process');
-        const cmd = process.platform === 'win32'
-          ? `netstat -ano | findstr :${preferredPort} | findstr LISTENING`
-          : `lsof -i :${preferredPort} -t`;
-        const output = execSync(cmd, { encoding: 'utf-8', timeout: 2000 }).trim();
-        // Windows: "TCP    0.0.0.0:7780    0.0.0.0:0    LISTENING    12345"
-        // Unix: "12345"
-        const match = output.match(/\d+$/);
-        if (match) {
-          const detectedPid = parseInt(match[0], 10);
-          // 验证进程是否为 BOOS (避免误杀其他程序)
-          const isBoos = await _isBoosProcess(detectedPid);
-          if (isBoos) {
-            oldPid = detectedPid;
-            console.log(`[boos] 检测到端口 ${preferredPort} 被 BOOS 进程 PID ${oldPid} 占用`);
-          } else {
-            console.warn(`[boos] 端口 ${preferredPort} 被非 BOOS 进程 PID ${detectedPid} 占用 — 跳过清理`);
-            oldPort = null; // 放弃清理，让 listenWithFallback 使用备用端口
-          }
-        }
-      } catch (e) {
-        console.warn('[boos] 端口探测失败:', e.message);
-      }
-    }
-  }
-
-  if (oldPid && !isPidDead(oldPid)) {
-    console.log(`[boos] 检测到旧实例 PID ${oldPid} (port ${oldPort}) — 发送关闭信号...`);
-
-    // 1. 发送优雅关闭信号
-    try {
-      await new Promise((resolve) => {
-        const req = http.request({
-          hostname: '127.0.0.1', port: oldPort,
-          path: '/api/shutdown', method: 'POST', timeout: 3000,
-        }, (res) => { res.resume(); res.on('end', resolve); });
-        req.on('error', resolve);
-        req.on('timeout', () => { req.destroy(); resolve(); });
-        req.end();
-      });
-    } catch {}
-
-    // 2. 等待旧实例释放端口 (最多 20s — gracefulShutdown 等 PTY 退出最多 15s)
-    console.log(`[boos] 等待旧实例退出 (最多 20s)...`);
-    for (let i = 0; i < 40; i++) { // 40 * 500ms = 20s
-      await new Promise(r => setTimeout(r, 500));
-      // 检查 PID 是否还存活 (比端口探测更可靠)
-      if (isPidDead(oldPid)) {
-        console.log(`[boos] 旧实例 PID ${oldPid} 已退出`);
-        oldPort = null; // 标记已成功清理
-        break;
-      }
-    }
-  }
-
-  // 3. Fallback: 如果旧实例仍存活，强制 kill
-  if (oldPid && !isPidDead(oldPid)) {
-    console.warn(`[boos] 旧实例 PID ${oldPid} 未响应关闭信号 — 强制终止...`);
-    try { process.kill(oldPid, 'SIGKILL'); } catch {}
-    // 再等 3s 让 OS 释放端口
-    await new Promise(r => setTimeout(r, 3000));
-  }
-
-  // 4. 清理 port.lock
-  try { fs.unlinkSync(PORT_LOCK_PATH); } catch {}
-}
-
-// 检查进程是否为 BOOS (通过命令行判断)
-async function _isBoosProcess(pid) {
-  try {
-    const { execSync } = require('node:child_process');
-    const cmd = process.platform === 'win32'
-      ? `wmic process where "processid=${pid}" get commandline /format:list`
-      : `ps -p ${pid} -o args=`;
-    const output = execSync(cmd, { encoding: 'utf-8', timeout: 2000 });
-    // 检查命令行是否包含 server.js 或 boos
-    return /server\.js|boos/i.test(output);
-  } catch {
-    return false;
-  }
-}
+// Port reclaim + session reconciliation extracted to lib/serverLifecycle.js
 
 (async () => {
   const cfg = await loadConfig();
   const preferredPort = process.env.BOOS_PORT ? Number(process.env.BOOS_PORT) : cfg.port;
-  // Sprint 17: 启动前先清理旧实例，确保端口可用
   await reclaimPortFromOldInstance(preferredPort);
   const { server, port } = await listenWithFallback(preferredPort);
   lifecycleState.currentPort = port;
@@ -490,128 +323,13 @@ async function _isBoosProcess(pid) {
     console.warn('[boos] failed to write port.lock:', e.message);
   }
 
-  // On boot, normalize legacy records and mark any persisted "running"
-  // sessions as exited — they belong to a previous server process whose
-  // PTYs are gone.
+  // On boot, reconcile persisted sessions (normalize, dedup, revive PTYs, auto-resume).
+  // Extracted to lib/serverLifecycle.js (Sprint 31 refactor).
   try {
-    await persistedSessions.normalizeStore();
-    let all = await persistedSessions.loadAll();
-    for (const s of all) {
-      if (s.status === 'running') {
-        await persistedSessions.markExited(s.id, null);
-      }
-    }
-
-    // Reload after markExited so dedup sees updated statuses.
-    all = await persistedSessions.loadAll();
-
-    // Dedup: for duplicate (cliId, cwd) pairs, soft-delete entries that
-    // lack cliSessionId when a sibling session for the same (cliId, cwd)
-    // DOES have one. This cleans up "ghost" sessions that would otherwise
-    // start fresh conversations on resume, losing the agent's history.
-    const seen = new Map(); // key = cliId|resolvedCwd → { best, ghosts }
-    for (const s of all) {
-      if (s.status === 'running') continue; // don't touch live sessions
-      if (s.deletedAt) continue; // already soft-deleted
-      const key = `${s.cliId}|${(s.cwd || '').toLowerCase()}`;
-      if (!seen.has(key)) seen.set(key, { best: null, ghosts: [] });
-      const entry = seen.get(key);
-      if (s.cliSessionId) {
-        if (entry.best && entry.best.cliSessionId) {
-          if ((entry.best.lastActiveAt || 0) >= (s.lastActiveAt || 0)) {
-            entry.ghosts.push(s);
-          } else {
-            entry.ghosts.push(entry.best);
-            entry.best = s;
-          }
-        } else {
-          entry.best = s;
-        }
-      } else {
-        entry.ghosts.push(s);
-      }
-    }
-    let deduped = 0;
-    for (const [, entry] of seen) {
-      if (!entry.best || !entry.best.cliSessionId) continue;
-      for (const ghost of entry.ghosts) {
-        if (!ghost.cliSessionId && ghost.status !== 'running') {
-          await persistedSessions.remove(ghost.id);
-          deduped++;
-        }
-      }
-    }
-    if (deduped > 0) {
-      console.log(`[boos] dedup: soft-deleted ${deduped} ghost session(s) (no cliSessionId, sibling had one)`);
-    }
-
-    // Sprint 9: auto-resume sessions whose PTYs survived the restart.
-    // Claude CLI processes are separate OS processes — they outlive the
-    // BOOS server restart. Find sessions whose persisted status was just
-    // marked 'exited' but have a live PTY, and restore 'running' status.
-    let revived = 0;
-    try {
-      const liveTermIds = new Set(
-        webTerminal.list().filter((t) => !t.exitedAt).map((t) => t.id),
-      );
-      for (const s of all) {
-        if (s.status === 'exited' && liveTermIds.has(s.id)) {
-          try {
-            const term = webTerminal.get(s.id);
-            await persistedSessions.markRunning(s.id, term ? term.pid : null);
-            revived++;
-          } catch {}
-        }
-      }
-    } catch {}
-    if (revived > 0) {
-      console.log(`[boos] auto-resume: ${revived} session(s) with surviving PTYs restored to running`);
-    }
-
-    // Sprint 17 C1: auto-resume sessions that were active at last shutdown.
-    // Reads the active-sessions.json saved by gracefulShutdown and spawns
-    // new PTYs with --resume <id> so agents come back online automatically.
-    try {
-      const AUTO_RESUME_PATH = path.join(DATA_DIR, 'active-sessions.json');
-      const raw = require('fs').readFileSync(AUTO_RESUME_PATH, 'utf-8');
-      const { ids } = JSON.parse(raw);
-      if (Array.isArray(ids) && ids.length > 0) {
-        console.log(`[boos] auto-resume: restoring ${ids.length} session(s) from previous run...`);
-        const cfg = await loadConfig();
-        const cliHelpers = require('./lib/cliHelpers');
-        let resumed = 0;
-        for (const id of ids) {
-          try {
-            const record = await persistedSessions.get(id);
-            if (!record) continue;
-            // Skip if already running (surviving PTY handled above).
-            const live = webTerminal.get(record.id);
-            if (live && !live.exitedAt) continue;
-            // Skip if manually stopped.
-            if (record.manualStopped) continue;
-
-            const cli = cliHelpers.findCliById(cfg, record.cliId);
-            if (!cli) continue;
-
-            await _sh.spawnSessionRecord({ record, cli, cfg, body: {}, resume: true });
-            resumed++;
-            console.log(`[boos] auto-resume: restored session ${id.slice(-8)} (${record.title || record.cwd})`);
-          } catch (e) {
-            console.warn(`[boos] auto-resume: failed to resume ${id.slice(-8)}:`, e.message);
-          }
-        }
-        if (resumed > 0) {
-          console.log(`[boos] auto-resume: restored ${resumed}/${ids.length} session(s)`);
-        }
-      }
-      // Clean up the auto-resume file so it doesn't re-run on next boot.
-      try { require('fs').unlinkSync(AUTO_RESUME_PATH); } catch {}
-    } catch (e) {
-      // File doesn't exist (first boot) or parse error — both non-fatal.
-      if (e.code !== 'ENOENT') {
-        console.warn('[boos] auto-resume: could not restore sessions:', e.message);
-      }
-    }
+    await reconcileSessionsOnBoot({
+      persistedSessions, webTerminal, loadConfig, DATA_DIR,
+      spawnSessionRecord: _sh.spawnSessionRecord,
+    });
   } catch (e) {
     console.error('[boos] could not reconcile persisted sessions:', e.message);
   }
@@ -620,58 +338,29 @@ async function _isBoosProcess(pid) {
   // Re-runs because fork / clear / resume rotate the upstream session id.
   bindingScanner.startPeriodicScan();
 
-  // Sprint 7: PostgreSQL conversation persistence — ensure Docker container
-  // is running and healthy, create tables. Degrades gracefully if Docker is
-  // not available (server boots normally, just without PG sync).
+  // PostgreSQL (degraded if Docker unavailable), agent-bus notifications,
+  // archive system, tunnel prewarm.
   if (process.env.BOOS_NO_POSTGRES !== '1') {
-    try {
-      await require('./lib/postgres').ensureContainer();
-    } catch (e) {
-      console.warn('[boos] postgres: ensureContainer failed —', e.message);
-    }
+    try { await require('./lib/postgres').ensureContainer(); }
+    catch (e) { console.warn('[boos] postgres: ensureContainer failed —', e.message); }
   }
 
-  // ── Agent-Bus notifications ────────────────────────────────────────
-  // In-process push bridge: listens to queue.inboxEvents and writes
-  // wake-up messages to agent PTYs. Replaces the SSE-based
-  // agentBusWatcher — no external connection needed since agent-bus
-  // is now embedded. Disable with BOOS_NO_AGENT_BUS_WATCH=1.
   if (process.env.BOOS_NO_AGENT_BUS_WATCH !== '1') {
     try {
-      // Sprint 14: rebuild identity cards from persisted agents/sessions
-      // so sandbox folder-level PM/SE works immediately after restart.
       const { bootstrapIdentities, pruneOldTasks } = require('./lib/agentBus/store');
       bootstrapIdentities().catch(e => console.warn('[boos] bootstrapIdentities failed:', e.message));
-
-      // Sprint 18: prune old tasks to prevent store file bloat.
-      // 4063 accumulated tasks = 3 MB JSON → every withFileLock write
-      // parses + serialises the whole file.  Trim completed/cancelled
-      // tasks older than 7 days on startup, then every 6 hours.
       pruneOldTasks().catch(e => console.warn('[boos] pruneOldTasks failed:', e.message));
-      setInterval(() => {
-        pruneOldTasks().catch(e => console.warn('[boos] pruneOldTasks failed:', e.message));
-      }, 6 * 3600_000).unref();
-
+      setInterval(() => { pruneOldTasks().catch(e => console.warn('[boos] pruneOldTasks failed:', e.message)); }, 6 * 3600_000).unref();
       require('./lib/agentBus/notifications').start('boos').catch(e => {
         console.warn('[boos] collaboration loop init failed:', e.message);
       });
-    } catch (e) {
-      console.warn('[boos] agent-bus notifications failed to start:', e.message);
-    }
+    } catch (e) { console.warn('[boos] agent-bus notifications failed to start:', e.message); }
   }
 
-  // Sprint 9: archive system — periodic prune of expired items.
-  try {
-    require('./lib/archive').startPeriodicPrune();
-  } catch (e) {
-    console.warn('[boos] archive system failed to start:', e.message);
-  }
+  try { require('./lib/archive').startPeriodicPrune(); }
+  catch (e) { console.warn('[boos] archive system failed to start:', e.message); }
 
-  // Prewarm tunnel provider probe. First /api/tunnel/status round-trip
-  // shells out to where.exe / --version / devtunnel user show — ~700ms
-  // of synchronous work that the user otherwise waits on the moment
-  // they open the Remote tab. Fire in the background here so the cache
-  // is warm by the time anyone clicks.
+  // Prewarm tunnel probe so Remote tab loads instantly.
   try {
     tunnel.probe(true).catch(() => {});
   } catch {}
@@ -752,20 +441,14 @@ async function _isBoosProcess(pid) {
   const apiUrl = `http://localhost:${port}`;
   const FRONTEND_URL = IS_DEV ? apiUrl : 'https://MistyBridge.github.io/boos/';
   lifecycleState.frontendUrl = FRONTEND_URL;
-  // ── Crash resilience ────────────────────────────────────────────
-  // Log unhandled rejections and exceptions instead of silently
-  // crashing. They still indicate bugs, but a crashing process leaves
-  // no breadcrumbs and kills the user's session mid-flight.
-  process.on('unhandledRejection', (reason, promise) => {
+  // Crash resilience — log, don't die.
+  process.on('unhandledRejection', (reason) => {
     console.error('[boos] UNHANDLED REJECTION:', reason?.message || reason);
     if (reason?.stack) console.error(reason.stack);
   });
   process.on('uncaughtException', (err) => {
     console.error('[boos] UNCAUGHT EXCEPTION:', err.message);
     if (err.stack) console.error(err.stack);
-    // Don't exit — the process might still serve other requests.
-    // If it's truly fatal, the heartbeat watchdog or idleWatcher
-    // will clean up.
   });
 
   console.log(
@@ -776,14 +459,7 @@ async function _isBoosProcess(pid) {
   console.log(`work dir:        ${cfg.workDir}`);
   console.log(`clis:            ${cfg.clis.map((c) => c.id).join(', ')} (default: ${cfg.defaultCliId})`);
 
-  // BOOS_NO_BROWSER=1 (set by the boos:// protocol launcher) suppresses
-  // the auto-open entirely. BOOS_FROM_UPGRADE=1 (set by upgrade-helper
-  // when it respawns boos post-install) does the same: the user is
-  // already in the helper UI which redirects to this fresh backend, so
-  // a second app-mode window would just shadow the first. Otherwise try
-  // app-mode (chromeless Edge/Chrome window); if no such browser is
-  // installed, openInBrowser falls back to the OS default browser on
-  // its own.
+  // BOOS_NO_BROWSER / BOOS_FROM_UPGRADE suppress auto-open browser window.
   const suppressBrowser = process.env.BOOS_NO_BROWSER === '1' || process.env.BOOS_FROM_UPGRADE === '1';
   const opened = suppressBrowser ? { kind: 'none', child: null } : openInBrowser(FRONTEND_URL);
 
@@ -794,39 +470,18 @@ async function _isBoosProcess(pid) {
   // BOOS_KEEP_ALIVE=1 disables all automatic shutdown.
 
   if (process.env.BOOS_KEEP_ALIVE !== '1') {
-    // Heartbeat watchdog — prevents zombie processes when the frontend
-    // disconnects. Runs every 30s regardless of whether a heartbeat was
-    // ever seen. Two shutdown paths (paths 1-2 below):
-    //
-    //   1. Heartbeat seen, then lost → 90s grace period.
-    //   2. No heartbeat ever seen within 120s of boot → zombie kill.
-    //
-    // Sprint 17: BOOS_NO_BROWSER=1 means we intentionally did not open a
-    // browser window (e.g. boos:// protocol handler, headless mode). Don't
-    // apply Path 2 in this mode — the server is meant to run headless.
+    // Heartbeat watchdog: 2 paths — (1) lost heartbeat after seen → 90s, (2) never seen → 120s.
+    // Headless mode (BOOS_NO_BROWSER=1): MCP connections keep alive, Path 2 skipped.
     setInterval(() => {
       const uptime = process.uptime() * 1000;
       const hasLiveSession = webTerminal.list().some((t) => !t.exitedAt);
-
-      // Path 1: frontend was seen once but stopped sending heartbeats.
       if (lifecycleState.heartbeatSeen) {
         if (Date.now() - lifecycleState.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
-          // Sprint 17: In headless mode (BOOS_NO_BROWSER=1), MCP
-          // connections keep the server alive even when the frontend
-          // stops sending heartbeats. This prevents the server from
-          // dying when a PWA tab connects briefly in headless mode
-          // and then closes — the MCP SSE clients still need it.
-          const isHeadlessP1 = process.env.BOOS_NO_BROWSER === '1';
-          const hasMcp = isHeadlessP1 && idleWatcher.status().mcpConnections > 0;
-          if (!hasLiveSession && !hasMcp) {
-            gracefulShutdown(`no heartbeat for ${HEARTBEAT_TIMEOUT_MS / 1000}s`);
-          }
+          const hasMcp = process.env.BOOS_NO_BROWSER === '1' && idleWatcher.status().mcpConnections > 0;
+          if (!hasLiveSession && !hasMcp) gracefulShutdown(`no heartbeat for ${HEARTBEAT_TIMEOUT_MS / 1000}s`);
         }
         return;
       }
-
-      // Path 2: no frontend ever connected. Skip if headless mode
-      // (BOOS_NO_BROWSER) — no frontend is expected.
       const isHeadless = process.env.BOOS_NO_BROWSER === '1';
       if (!hasLiveSession && uptime > 120_000 && !isHeadless) {
         gracefulShutdown('no frontend connected within 120s of boot');
