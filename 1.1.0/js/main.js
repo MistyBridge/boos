@@ -8,12 +8,13 @@ console.log('%c[boos] v1.1.0-sprint24 loaded %c决策区+目标面板已就绪',
 import { render } from 'preact';
 import { effect } from '@preact/signals';
 import { html } from './html.js';
-import { loadPersisted, clockTick, lastRefreshAt, installPrompt, isInstalledPwa, sidebarForcedCollapsed, isMobile, mobileDrawerOpen, activeTab, activeSessionId, sessions, TAB_HEADINGS } from './state.js';
+import { loadPersisted, lastRefreshAt, installPrompt, isInstalledPwa, sidebarForcedCollapsed, isMobile, mobileDrawerOpen, activeTab, activeSessionId, sessions, TAB_HEADINGS } from './state.js';
 import { T } from './i18n.js';
 import { httpBase, apiAuthHeaders, setToken, getDeviceId, isRemoteAccess } from './backend.js';
 import { api, loadConfig, refreshAll, loadSessions, loadDeletedSessions, loadFolders, loadWorkspaces, loadTasks, pollHealth, pendingDevice } from './api.js';
 import { setToast } from './toast.js';
 import { App } from './components/App.js';
+import './components/TimeAgo.js';   // Sprint 29: <time-ago> custom element registration
 import { installGlobalKeybindings } from './keybindings.js';
 
 // First thing we do on boot: if the URL carries `?token=…` it's a fresh
@@ -226,11 +227,8 @@ window.addEventListener('resize', syncViewportHeight);
     }
   }
 
-  // Data refresh + clock tick (same cadence so fmtAgo "Ns ago" relative
-  // labels naturally track the data refresh; bumping clockTick more
-  // frequently would just cause needless re-renders since fmtAgo's
-  // resolution is coarse — 5s buckets under a minute, then m/h/d).
-  // Remote tunnel sessions get a slower cadence to keep background API
+  // Data refresh interval. Remote tunnel sessions get a slower cadence to
+  // keep background API traffic from competing with terminal WebSocket.
   // traffic from competing with terminal WebSocket input/output.
   // loadWorkspaces is included because the workspace "in use" flag is
   // derived from live session cwds server-side — without it, sessions
@@ -246,13 +244,6 @@ window.addEventListener('resize', syncViewportHeight);
       // health so the OfflineBanner can show if the host goes down
       // while we're sitting on the approval screen.
       pollHealth();
-      // Sprint 18 P2: only update clockTick when the minute boundary
-    // crosses, since fmtAgo resolution is one-minute buckets.
-    // Avoids needless re-renders of every "Ns ago" label every 5s.
-    const now = Date.now();
-    if (Math.floor(now / 60000) !== Math.floor(clockTick.value / 60000)) {
-      clockTick.value = now;
-    }
       return;
     }
     try {
@@ -260,13 +251,6 @@ window.addEventListener('resize', syncViewportHeight);
       lastRefreshAt.value = Date.now();
     } catch { /* swallow — next tick retries */ }
     pollHealth();
-    // Sprint 18 P2: only update clockTick when the minute boundary
-    // crosses, since fmtAgo resolution is one-minute buckets.
-    // Avoids needless re-renders of every "Ns ago" label every 5s.
-    const now = Date.now();
-    if (Math.floor(now / 60000) !== Math.floor(clockTick.value / 60000)) {
-      clockTick.value = now;
-    }
   }, refreshMs);
 
   // Heartbeat · the server uses this to (a) decide whether to shut down
