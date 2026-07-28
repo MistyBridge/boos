@@ -669,3 +669,27 @@ export async function fetchTask(id) {
 export async function loadTasks() {
   try { await fetchTasks(); } catch { /* endpoint may not exist yet */ }
 }
+
+// ── Sprint 32: DAG Dashboard API ─────────────────────────────────────────
+// NOTE: Backend REST proxy endpoints (/api/dags/*) need to be created.
+// Frontend calls these; backend bridges to agent-bus MCP dag_* tools.
+
+/** Fetch all DAGs in the workspace. Proxies to dag_list MCP. */
+export async function fetchDagList(workspace = 'boos') {
+  return api('GET', `/api/dags?workspace=${encodeURIComponent(workspace)}`);
+}
+
+/** Fetch single DAG status with full task list. Proxies to dag_status MCP. */
+export async function fetchDagStatus(dagId) {
+  return api('GET', `/api/dags/${encodeURIComponent(dagId)}`);
+}
+
+/** Approve a submitted task. Proxies to dag_approve_task MCP. */
+export async function approveDagTask(taskId, comment) {
+  return api('POST', `/api/dags/tasks/${encodeURIComponent(taskId)}/approve`, { comment: comment || '' });
+}
+
+/** Reject a submitted task with mandatory feedback. Proxies to dag_reject_task MCP. */
+export async function rejectDagTask(taskId, comment) {
+  return api('POST', `/api/dags/tasks/${encodeURIComponent(taskId)}/reject`, { comment });
+}

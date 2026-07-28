@@ -701,6 +701,41 @@ export const T = {
     loadGoalsFailed: '加载目标失败 · ',
   },
 
+  // ── DAG 仪表盘 ──
+  dashboard: {
+    title: '仪表盘',
+    subtitle: 'DAG 任务流进度与审批。',
+  },
+  dashboardPage: {
+    noDags: '暂无 DAG',
+    noDagsHint: '等待 PM 创建 DAG 工作流。',
+    status_draft: '草稿',
+    status_active: '活跃',
+    status_completed: '已完成',
+    status_cancelled: '已取消',
+    approve: '批准',
+    approveTitle: '批准任务',
+    approveConfirm: (title) => `确认批准 "${title}"？这将解锁下游依赖任务。`,
+    reject: '驳回',
+    rejectTitle: '驳回任务',
+    rejectHint: '请填写驳回原因（将发送给执行者）：',
+    rejectConfirm: '确认驳回',
+    loadDagsFailed: '加载 DAG 失败 · ',
+    task_pending: '等待中',
+    task_active: '执行中',
+    task_submitted: '待审批',
+    task_approved: '已批准',
+    task_rejected: '已驳回',
+    task_escalated: '已升级',
+    task_executor: '执行者',
+    task_reviewer: '审查者',
+    task_deps: '依赖',
+    task_retries: (n) => `重试 ${n} 次`,
+    depArrow: '→',
+    approved: (title) => `已批准 · ${title}`,
+    rejected: (title) => `已驳回 · ${title}`,
+  },
+
   // ── CSS 伪元素文本 ──
   css: {
     toastOk: 'OK',
