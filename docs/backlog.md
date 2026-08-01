@@ -8,10 +8,10 @@
 
 | # | 问题 | 影响 | 负责人 | 状态 |
 |---|------|------|--------|:--:|
-| B1 | `respond_task` 竞态条件 (sync `store.getTask` vs async `claimPendingTaskAsync`) | 任务响应偶发失败，false "task not found" | PM / A4 | 🔴 待修复 |
-| B2 | `taskTimeout.js` 扫描旧 store (`agent-bus.json`)，Sprint 35 改为 per-agent inbox 后扫不到任务 | 超时任务不会被回收 | PM | 🔴 待修复 |
-| B3 | `heartbeat.js` 崩溃恢复扫描旧 store，遗漏 inbox 文件中的 in_progress 任务 | Agent 崩溃后任务无法自动回收 | PM | 🔴 待修复 |
-| B4 | DAG 任务无超时机制 — stuck in `active` 永久不回收 | DAG 任务卡死无感知 | PM | 🟡 待修复 |
+| B1 | `respond_task` 竞态条件 — 移除 sync pre-check，纯走 queue.respondTask() | Sprint 35 | PM / A4 | ✅ |
+| B2 | `taskTimeout.js` 扫描旧 store → 适配 per-agent inbox 文件 | Sprint 36 P1 | PM | ✅ |
+| B3 | `heartbeat.js` 崩溃恢复扫描旧 store → 适配 inbox | Sprint 36 P1 | PM | ✅ |
+| B4 | DAG 任务无超时机制 → 新增 `dagTimeout.js` | Sprint 36 P1 | PM | ✅ |
 | B5 | 前端零测试覆盖 | 回归风险高 | A3 | 🔴 待开始 |
 
 ---
@@ -56,7 +56,7 @@
 | 33 | Identity 严格 1:1 约束 | ✅ |
 | 34 | (合并入 35) | — |
 | 35 | 任务生命周期修复 + 身份同步加固 + 前端依赖本地化 | ✅ |
-| **36** | **当前: 稳定化 + PMO 升级链 + 测试覆盖** | 🔄 |
+| **36** | **当前: Bug 修复 + 轮询清理 + 测试覆盖 (进行中)** | 🔄 |
 
 ---
 

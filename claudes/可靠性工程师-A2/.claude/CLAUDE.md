@@ -250,7 +250,7 @@ D:\AI IDE\CC_BOOS\
 | CI/CD | ci-fix | CI 故障诊断 |
 | 调试 | debug / debugging / systematic-debugging | 系统化调试 |
 | 性能 | perf-optimize | 性能优化 |
-| 协作 | agent-bus-polling | Agent-Bus 任务轮询 |
+| 协作 | agent-bus-polling | Agent-Bus 事件驱动协作 |
 | 工具 | deep-research | 深度调研报告 |
 | 工具 | update-config | 配置管理 |
 

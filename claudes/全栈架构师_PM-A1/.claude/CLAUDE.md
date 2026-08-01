@@ -190,11 +190,8 @@ Workspace: `boos` | UID = Claude `--resume` UUID
 
 ### PM 检查 escalated 任务
 
-```javascript
-// 定期或 pmo_poll 时执行
-const dagStore = require('./lib/agentBus/dagStore');
-const tasks = dagStore.getTasksByStatus(dagId, 'escalated');
-```
+> **Sprint 36**: escalated 任务检测已由 BOOS 代码层接管 (`autoSupervisor.js` +
+> `dagTimeout.js`)。PM 收到 SSE 推送 + auto-wake 后被动响应，不再主动轮询。
 
 ---
 
