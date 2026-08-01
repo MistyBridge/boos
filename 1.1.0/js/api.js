@@ -36,28 +36,40 @@ export function surfaceRemoteGateFailure(status, json = {}) {
   }
 }
 
-export async function api(method, url, body) {
-  const opts = {
-    method,
-    headers: apiAuthHeaders({ 'Content-Type': 'application/json' }),
-  };
-  if (body !== undefined) opts.body = JSON.stringify(body);
-  const r = await fetch(httpBase() + url, opts);
-  const text = await r.text();
-  let json;
-  try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
-  if (!r.ok) {
-    // Surface device-approval pending state. Only matters on remote
-    // tabs — host's loopback browser never gets a 401/403 from these
-    // checks.
-    surfaceRemoteGateFailure(r.status, json);
-    throw new Error(json.error || `HTTP ${r.status}`);
+const API_TIMEOUT_MS = 30_000;
+
+export async function api(method, url, body, { timeout = API_TIMEOUT_MS } = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const opts = {
+      method,
+      headers: apiAuthHeaders({ 'Content-Type': 'application/json' }),
+      signal: ctrl.signal,
+    };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const r = await fetch(httpBase() + url, opts);
+    const text = await r.text();
+    let json;
+    try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
+    if (!r.ok) {
+      // Surface device-approval pending state. Only matters on remote
+      // tabs — host's loopback browser never gets a 401/403 from these
+      // checks.
+      surfaceRemoteGateFailure(r.status, json);
+      throw new Error(json.error || `HTTP ${r.status}`);
+    }
+    // PendingApprovalOverlay clears pendingDevice itself based on the
+    // /api/devices/me body (which can return 200 with status:'pending'
+    // since that endpoint is gate-exempt). Doing an auto-clear here on
+    // any 2xx would race the overlay's poll and dismiss it prematurely.
+    return json;
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error(`请求超时 (${timeout / 1000}s)`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  // PendingApprovalOverlay clears pendingDevice itself based on the
-  // /api/devices/me body (which can return 200 with status:'pending'
-  // since that endpoint is gate-exempt). Doing an auto-clear here on
-  // any 2xx would race the overlay's poll and dismiss it prematurely.
-  return json;
 }
 
 export async function loadConfig() {
@@ -628,11 +640,53 @@ export async function fetchRootInbox() {
   return api('GET', '/api/decisions/root-inbox');
 }
 
-/** Set agent permission levels for a folder. levels: { "uid": "PM"|"SE" } */
+/** Set agent permission levels for a folder. levels: { "uid": "PM"|"PMO"|"SE" } */
 export async function setFolderAgentLevels(folderId, levels) {
   const r = await api('PUT', `/api/folders/${encodeURIComponent(folderId)}/agent-levels`, { levels });
   await loadFolders();
   return r;
+}
+
+/** Toggle auto-supervisor for a folder. */
+export async function setFolderAutoSupervisor(folderId, enabled) {
+  return api('PUT', `/api/folders/${encodeURIComponent(folderId)}/auto-supervisor`, { enabled });
+}
+
+// ── Sprint 32: Workspace config (PM/PMO + auto-supervisor) ────────────
+
+/** Get workspace config for one workspace. */
+export async function getWorkspaceConfig(workspace) {
+  return api('GET', `/api/workspace-config/${encodeURIComponent(workspace)}`);
+}
+
+/** Get all workspace configs. */
+export async function getAllWorkspaceConfigs() {
+  return api('GET', '/api/workspace-config');
+}
+
+/** Assign PM to a workspace. */
+export async function setWorkspacePM(workspace, uid) {
+  return api('PUT', `/api/workspace-config/${encodeURIComponent(workspace)}/pm`, { uid });
+}
+
+/** Remove PM from a workspace. */
+export async function clearWorkspacePM(workspace) {
+  return api('DELETE', `/api/workspace-config/${encodeURIComponent(workspace)}/pm`);
+}
+
+/** Assign PMO to a workspace. */
+export async function setWorkspacePMO(workspace, uid) {
+  return api('PUT', `/api/workspace-config/${encodeURIComponent(workspace)}/pmo`, { uid });
+}
+
+/** Remove PMO from a workspace. */
+export async function clearWorkspacePMO(workspace) {
+  return api('DELETE', `/api/workspace-config/${encodeURIComponent(workspace)}/pmo`);
+}
+
+/** Toggle auto-supervisor for a workspace. */
+export async function setWorkspaceAutoSupervisor(workspace, enabled) {
+  return api('PUT', `/api/workspace-config/${encodeURIComponent(workspace)}/auto-supervisor`, { enabled });
 }
 
 // ── Sprint 17 A4: Agent-Bus Task API ─────────────────────────────
@@ -670,26 +724,24 @@ export async function loadTasks() {
   try { await fetchTasks(); } catch { /* endpoint may not exist yet */ }
 }
 
-// ── Sprint 32: DAG Dashboard API ─────────────────────────────────────────
-// NOTE: Backend REST proxy endpoints (/api/dags/*) need to be created.
-// Frontend calls these; backend bridges to agent-bus MCP dag_* tools.
+// ── DAG Dashboard API (routes/dags.js) ────────────────────────────────────
 
-/** Fetch all DAGs in the workspace. Proxies to dag_list MCP. */
+/** Fetch all DAGs in the workspace. → GET /api/dags */
 export async function fetchDagList(workspace = 'boos') {
   return api('GET', `/api/dags?workspace=${encodeURIComponent(workspace)}`);
 }
 
-/** Fetch single DAG status with full task list. Proxies to dag_status MCP. */
+/** Fetch single DAG status with full task list. → GET /api/dags/:id */
 export async function fetchDagStatus(dagId) {
   return api('GET', `/api/dags/${encodeURIComponent(dagId)}`);
 }
 
-/** Approve a submitted task. Proxies to dag_approve_task MCP. */
+/** Approve a submitted task. → POST /api/dags/tasks/:id/approve */
 export async function approveDagTask(taskId, comment) {
   return api('POST', `/api/dags/tasks/${encodeURIComponent(taskId)}/approve`, { comment: comment || '' });
 }
 
-/** Reject a submitted task with mandatory feedback. Proxies to dag_reject_task MCP. */
+/** Reject a submitted task with mandatory feedback. → POST /api/dags/tasks/:id/reject */
 export async function rejectDagTask(taskId, comment) {
   return api('POST', `/api/dags/tasks/${encodeURIComponent(taskId)}/reject`, { comment });
 }

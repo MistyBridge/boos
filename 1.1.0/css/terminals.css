@@ -151,7 +151,7 @@
   min-height: 0;
   width: 100%;
   overflow: hidden;
-  contain: strict;
+  contain: layout style;   /* size containment removed — causes height collapse in flex contexts */
   will-change: transform;
 }
 
