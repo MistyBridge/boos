@@ -1,7 +1,7 @@
 # BOOS — Tech Lead / 全栈架构师 (兼 PM)
 
 > **我是谁**: 技术决策者 + 后端核心 + 产品方向。唯一同时拥有架构决定权和产品方向决定权的人。
-> **入职**: 2026-07-13 | **当前日期**: 2026-07-28 | **项目**: @mistybridge/boos v1.2.0-dev | **UID**: `agent_5tJxrPyDOErB`
+> **入职**: 2026-07-13 | **当前日期**: 2026-08-01 | **项目**: @mistybridge/boos v1.2.0-dev | **UID**: `82b97d58-c66e-45d3-9f6d-af3476d5abdd`
 
 ---
 
@@ -91,16 +91,16 @@ server.js              — 顺序修正 + 超时 5s→15s
 
 ## 团队结构 (Agent-Bus)
 
-Workspace: `boos` | 注册方式: `register_agent(name="全栈架构师_PM-A1", workspace="boos", role="supervisor", project="boos-core")`
+Workspace: `boos` | UID = Claude `--resume` UUID
 
-| 角色 | Agent-Bus UID | Session | 状态 |
-|------|--------------|---------|:--:|
-| 全栈架构师_PM-A1 (我) | `agent_5tJxrPyDOErB` | PM-A1 | 🟢 |
-| 前端工程师-A3 | `agent_XlkuC2xcWqn4` | 前端工程师-A3 | 🟢 |
-| 平台集成工程师-A4 | `agent_1dHJDPRpohr7` | 平台集成工程师-A4 | 🟢 |
-| 可靠性工程师-A2 | `agent_DcrCqj4G_UjI` | 可靠性工程师-A2 | 🟢 |
+| 角色 | UID (cliSessionId) | 状态 |
+|------|-------------------|:--:|
+| 全栈架构师_PM-A1 (我) | `82b97d58-c66e-45d3-9f6d-af3476d5abdd` | 🟢 |
+| 前端工程师-A3 | `90490923-dc5b-4ac8-be3f-62c3efbe2bb0` | 🟢 |
+| 平台集成工程师-A4 | `d428dd45-f2ac-40e7-8825-4e82ba98686a` | 🟢 |
+| 可靠性工程师-A2 | `81c99498-c60d-4d92-8ae8-fe5ec41d5cab` | 🟢 |
 
-> ⚠️ 旧代理解耦 — 旧 PM (`agent_tXe7fPoJgjhY`)、旧 前端 (`agent_m6J9p1fJhyU2`)、旧 平台集成 (`agent_7DULYFl6v-QG`)、旧 可靠性 (`agent_fZ1nYJ-wzopN`) 已退役。新团队 A1/A2/A3/A4 全接管 boos-core。
+> ⚠️ Sprint 33: 彻底废除 agent_xxx/sess-xxx/boos_session_id。UID = Claude 自己的 --resume UUID。name 仅为元数据。
 
 ---
 
@@ -221,10 +221,10 @@ routes/sessions-launch.js ← /api/sessions/new + resume (360 lines)
 
 | 任务类型 | 派发给 | UID |
 |---------|--------|-----|
-| 前端/UI/CSS/Preact/xterm.js | 前端工程师-A3 | agent_XlkuC2xcWqn4 |
-| Agent-Bus/MCP/SSE/跨平台 | 平台集成工程师-A4 | agent_1dHJDPRpohr7 |
-| 测试/E2E/安全审计/CI | 可靠性工程师-A2 | agent_DcrCqj4G_UjI |
-| 架构设计/server.js/路由/DB | PM (自己) | agent_5tJxrPyDOErB |
+| 前端/UI/CSS/Preact/xterm.js | 前端工程师-A3 | 90490923-dc5b-4ac8-be3f-62c3efbe2bb0 |
+| Agent-Bus/MCP/SSE/跨平台 | 平台集成工程师-A4 | d428dd45-f2ac-40e7-8825-4e82ba98686a |
+| 测试/E2E/安全审计/CI | 可靠性工程师-A2 | 81c99498-c60d-4d92-8ae8-fe5ec41d5cab |
+| 架构设计/server.js/路由/DB | PM (自己) | 82b97d58-c66e-45d3-9f6d-af3476d5abdd |
 
 ### PM 工作流 (唤醒指令模式)
 1. 启动 → `register_agent(name="全栈架构师_PM-A1", workspace="boos", role="supervisor", project="boos-core")`
@@ -351,9 +351,31 @@ tests/agentBus-schemas.test.js: 8/8 pass
 
 ### ⚠️ 待重启
 
-BOOS 服务器仍运行旧代码。需重启 BOOS 让 Sprint 31-32 变更生效：
-- `store._syncLoad` 在旧代码中未导出 → MCP dag_status 报错
-- pmoEngine / sleepManager 未加载
-- wake_agent 权限修复未生效
+~~BOOS 服务器仍运行旧代码。需重启 BOOS 让 Sprint 31-32 变更生效：~~
+~~- `store._syncLoad` 在旧代码中未导出 → MCP dag_status 报错~~
+~~- pmoEngine / sleepManager 未加载~~
+~~- wake_agent 权限修复未生效~~
+✅ Sprint 33 已完成，代码已部署，历史数据已清理。
 
-*最后更新: 2026-07-28 · Sprint 31 完成 · Sprint 32 进行中*
+---
+
+## Sprint 33: Identity 严格 1:1 约束 ✅ (2026-08-01)
+
+| 变更 | 内容 | 状态 |
+|------|------|:--:|
+| PG DDL | identity_index 加 UNIQUE(mcp_session_id) + UNIQUE(name,workspace) | ✅ |
+| PG DDL | agent_sessions 重写 — PK=cli_session_id, UNIQUE(boos_session_id), 删 is_current | ✅ |
+| JSON card | 简化为 {name, workspace, updated_at} — 2 业务字段，零路由字段 | ✅ |
+| PG 同步 | writeIdentity 自动调 adapter.upsert 同步 mcp_session_id 到 PG | ✅ |
+| Bug 修复 | idLabel 未定义、{...existing} 扩散旧字段 | ✅ |
+| 历史清理 | 71 条 agent_xxx/sess-xxx 清理，4 agent registry 纯 UUID | ✅ |
+| Agent 通知 | A2/A3/A4 CLAUDE.md 已更新 + task 已发送 | ✅ |
+
+### 最终架构
+```
+JSON card:    {name, workspace}              ← 仅 name↔UUID 索引
+PG:           identity_index + agent_sessions ← 全部路由字段
+约束:         1:1:1 全部 UNIQUE              ← 防身份混淆
+```
+
+*最后更新: 2026-08-01 · Sprint 33 完成*

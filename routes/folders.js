@@ -1,4 +1,4 @@
-// Folder CRUD routes.
+// Folder CRUD routes + agent permission levels + auto-supervisor toggle.
 // Replaces inline handlers in server.js L668–703.
 //
 // register(app, deps)
@@ -28,7 +28,6 @@ function register(app, { asyncH, folders, persistedSessions }) {
   }));
 
   app.delete('/api/folders/:id', asyncH(async (req, res) => {
-    // Move all sessions in this folder to Unsorted before delete.
     const all = await persistedSessions.loadAll();
     for (const s of all) {
       if (s.folderId === req.params.id) {
@@ -58,8 +57,10 @@ function register(app, { asyncH, folders, persistedSessions }) {
     res.json({ folder: updated });
   }));
 
-  // Sprint 13.1/13.2: agent permission levels per folder.
-  // Accepts legacy string "PM"|"SE" OR new object { sandbox: "PM"|"SE", write: boolean }.
+  // Sprint 13.1/13.2/32: agent permission levels per folder.
+  // Accepts legacy string "PM"|"PMO"|"SE" OR new object { sandbox: "PM"|"PMO"|"SE", write: boolean }.
+  const VALID_LEVELS = new Set(['PM', 'PMO', 'SE']);
+
   app.get('/api/folders/:id/agent-levels', asyncH(async (req, res) => {
     const folder = await folders.getAgentLevels(req.params.id);
     res.json({ folderId: req.params.id, levels: folder });
@@ -68,17 +69,17 @@ function register(app, { asyncH, folders, persistedSessions }) {
   app.put('/api/folders/:id/agent-levels', asyncH(async (req, res) => {
     const { levels } = req.body || {};
     if (levels && typeof levels !== 'object') {
-      return res.status(400).json({ error: 'levels must be an object { uid: "PM"|"SE" | { sandbox, write } }' });
+      return res.status(400).json({ error: 'levels must be an object { uid: "PM"|"PMO"|"SE" | { sandbox, write } }' });
     }
     if (levels) {
       for (const [uid, lv] of Object.entries(levels)) {
         if (typeof lv === 'string') {
-          if (lv !== 'PM' && lv !== 'SE') {
-            return res.status(400).json({ error: 'invalid level "' + lv + '" for ' + uid + ' — must be "PM" or "SE"' });
+          if (!VALID_LEVELS.has(lv)) {
+            return res.status(400).json({ error: 'invalid level "' + lv + '" for ' + uid + ' — must be "PM", "PMO", or "SE"' });
           }
         } else if (typeof lv === 'object') {
-          if (lv.sandbox && lv.sandbox !== 'PM' && lv.sandbox !== 'SE') {
-            return res.status(400).json({ error: 'invalid sandbox "' + lv.sandbox + '" for ' + uid + ' — must be "PM" or "SE"' });
+          if (lv.sandbox && !VALID_LEVELS.has(lv.sandbox)) {
+            return res.status(400).json({ error: 'invalid sandbox "' + lv.sandbox + '" for ' + uid + ' — must be "PM", "PMO", or "SE"' });
           }
           if (lv.write !== undefined && typeof lv.write !== 'boolean') {
             return res.status(400).json({ error: 'write must be boolean for ' + uid });
@@ -89,6 +90,18 @@ function register(app, { asyncH, folders, persistedSessions }) {
       }
     }
     const updated = await folders.setAgentLevels(req.params.id, levels || {});
+    if (!updated) return res.status(404).json({ error: 'folder not found' });
+    res.json({ ok: true, folder: updated });
+  }));
+
+  // Sprint 32: auto-supervisor toggle per folder.
+  // When disabled, autoSupervisor skips this folder's workspace during polling.
+  app.put('/api/folders/:id/auto-supervisor', asyncH(async (req, res) => {
+    const { enabled } = req.body || {};
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+    const updated = await folders.update(req.params.id, { autoSupervisorEnabled: enabled });
     if (!updated) return res.status(404).json({ error: 'folder not found' });
     res.json({ ok: true, folder: updated });
   }));

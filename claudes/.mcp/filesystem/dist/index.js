@@ -13,13 +13,31 @@ import {
 // Function imports
 formatSize, validatePath, getFileStats, readFileContent, writeFileContent, searchFilesWithValidation, applyFileEdits, tailFile, headFile, setAllowedDirectories, } from './lib.js';
 // Command line argument parsing
-const args = process.argv.slice(2);
+const rawArgs = process.argv.slice(2);
+
+// Extract --write-extensions before directory args.
+// When set, write_file / edit_file / move_file are restricted to these extensions.
+// Format: --write-extensions=.md,.txt,.json
+let writeExtensions = null;
+const dirArgs = [];
+for (const a of rawArgs) {
+    if (a.startsWith('--write-extensions=')) {
+        writeExtensions = a.split('=')[1].split(',').map(s => s.trim().toLowerCase());
+        if (writeExtensions.length === 0 || writeExtensions[0] === '') writeExtensions = null;
+    } else {
+        dirArgs.push(a);
+    }
+}
+const args = dirArgs;
+
 if (args.length === 0) {
-    console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]");
+    console.error("Usage: mcp-server-filesystem [--write-extensions=ext1,ext2,...] [allowed-directory] [additional-directories...]");
     console.error("Note: Allowed directories can be provided via:");
     console.error("  1. Command-line arguments (shown above)");
     console.error("  2. MCP roots protocol (if client supports it)");
     console.error("At least one directory must be provided by EITHER method for the server to operate.");
+    console.error("Options:");
+    console.error("  --write-extensions=ext,...  Restrict write/edit/move to these extensions (e.g. .md,.txt,.json)");
 }
 // Store allowed directories in normalized and resolved form
 let allowedDirectories = await Promise.all(args.map(async (dir) => {
@@ -107,10 +125,22 @@ const SearchFilesArgsSchema = z.object({
 const GetFileInfoArgsSchema = z.object({
     path: z.string(),
 });
+// Write permission validation — when writeExtensions is set, only those
+// file extensions can be written, edited, or moved.  Non-existent files
+// always pass (they'll be validated again after creation by the caller).
+function validateWritePermission(filePath, operation) {
+    if (!writeExtensions) return;
+    const ext = path.extname(filePath).toLowerCase();
+    if (!ext) return; // files without extension are always writable
+    if (!writeExtensions.includes(ext)) {
+        throw new Error(`Write permission denied: file extension "${ext}" is not in the allowed write extensions: ${writeExtensions.join(', ')}. Operation: ${operation}`);
+    }
+}
+
 // Server setup
 const server = new McpServer({
     name: "secure-filesystem-server",
-    version: "0.2.0",
+    version: "0.3.0",
 });
 // Reads a file as a stream of buffers, concatenates them, and then encodes
 // the result to a Base64 string. This is a memory-efficient way to handle
@@ -265,6 +295,7 @@ server.registerTool("write_file", {
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
 }, async (args) => {
     const validPath = await validatePath(args.path);
+    validateWritePermission(validPath, 'write_file');
     await writeFileContent(validPath, args.content);
     const text = `Successfully wrote to ${args.path}`;
     return {
@@ -289,6 +320,7 @@ server.registerTool("edit_file", {
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
 }, async (args) => {
     const validPath = await validatePath(args.path);
+    validateWritePermission(validPath, 'edit_file');
     const result = await applyFileEdits(validPath, args.edits, args.dryRun);
     return {
         content: [{ type: "text", text: result }],
@@ -466,6 +498,7 @@ server.registerTool("move_file", {
 }, async (args) => {
     const validSourcePath = await validatePath(args.source);
     const validDestPath = await validatePath(args.destination);
+    validateWritePermission(validDestPath, 'move_file');
     await fs.rename(validSourcePath, validDestPath);
     const text = `Successfully moved ${args.source} to ${args.destination}`;
     const contentBlock = { type: "text", text };

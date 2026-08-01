@@ -5,16 +5,17 @@
 import { html } from '../html.js';
 import { useEffect, useState } from 'preact/hooks';
 import {
-  config, configDirty, accentColor, folders, workspaces, serverHealth,
+  config, configDirty, accentColor, folders, serverHealth,
   restartInFlight, themeMode,
   setAccentColor, ACCENT_DEFAULT, setThemeMode,
 } from '../state.js';
 import {
-  api, loadConfig, loadWorkspaces, loadFolders,
+  api, loadWorkspaces, loadFolders,
   createCli, updateCli, deleteCli, setDefaultCli, testCli,
   createRepo, updateRepo, deleteRepo,
   createFolder, renameFolder, deleteFolder, reorderFolders,
-  deleteWorkspace, restartBackend, setFolderRootPath, setFolderAgentLevels,
+  restartBackend, setFolderRootPath, setFolderAgentLevels,
+  setFolderAutoSupervisor,
 } from '../api.js';
 import { setToast } from '../toast.js';
 import { boosConfirm } from '../dialog.js';
@@ -30,6 +31,8 @@ import { IconPlus, IconPencil, IconClose, IconTerminal, IconFolder, IconBranch, 
 import { parseArgs, formatArgs } from '../util.js';
 import { DirectoryPicker } from '../components/DirectoryPicker.js';
 import { Modal } from '../components/Modal.js';
+import { WorkspaceConfigSection, WorkspaceList } from './ConfigureWorkspaceSection.js';
+import { HRAgentSection } from './ConfigureHRAgentSection.js';
 
 // Tokenize the free-form args fields into string[] before they hit
 // the backend. Form values arrive as strings (text inputs) — backend
@@ -343,6 +346,11 @@ export function ConfigurePage() {
       <${WorkspaceList} />
     </${Section}>
 
+    <${Section} title="Workspace 配置"
+                meta=${html`PM/PMO 指派 + Auto-Supervisor 开关。每个工作区最多 1 名 PM 和 1 名 PMO。`}>
+      <${WorkspaceConfigSection} />
+    </${Section}>
+
     <${Section} title="HR Agent"
                 meta="自动招募与资产管理。启用后 HR Agent 定期扫描配置的资产路径。">
       <${HRAgentSection} />
@@ -445,6 +453,7 @@ export function ConfigurePage() {
 export function FolderSettingsModal({ folder, agents, onClose }) {
   const [rootPath, setRootPath] = useState(folder ? (folder.rootPath || '') : '');
   const [levels, setLevels] = useState(folder ? (folder.agentLevels || {}) : {});
+  const [autoSup, setAutoSup] = useState(folder ? (folder.autoSupervisorEnabled !== false) : true);
   const [saving, setSaving] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
 
@@ -457,6 +466,7 @@ export function FolderSettingsModal({ folder, agents, onClose }) {
         await setFolderRootPath(folder.id, rootPath || null);
       }
       await setFolderAgentLevels(folder.id, levels);
+      await setFolderAutoSupervisor(folder.id, autoSup);
       setToast('文件夹设置已保存');
       onClose();
       await loadFolders();
@@ -470,22 +480,22 @@ export function FolderSettingsModal({ folder, agents, onClose }) {
   };
 
   // Update a single field on an agent level. Normalizes old string format.
-  // Sprint 13.3 P0 fix: when switching to PM, auto-enable write permission.
+  // PM/PMO auto-enable write permission. SE respects explicit toggle.
   const updateAgentLevel = (uid, field, value) => {
     setLevels((prev) => {
       const cur = prev[uid];
       const current = typeof cur === 'string'
-        ? { sandbox: cur, write: cur === 'PM' }
+        ? { sandbox: cur, write: cur === 'PM' || cur === 'PMO' }
         : (cur || { sandbox: 'SE', write: false });
       const patch = { ...current, [field]: value };
-      if (field === 'sandbox' && value === 'PM') patch.write = true;
+      if (field === 'sandbox' && (value === 'PM' || value === 'PMO')) patch.write = true;
       return { ...prev, [uid]: patch };
     });
   };
 
   // Normalize a level value from old string or new object format.
   const _normalizeLevel = (lv) => {
-    if (typeof lv === 'string') return { sandbox: lv, write: lv === 'PM' };
+    if (typeof lv === 'string') return { sandbox: lv, write: lv === 'PM' || lv === 'PMO' };
     return lv || { sandbox: 'SE', write: false };
   };
 
@@ -534,7 +544,9 @@ export function FolderSettingsModal({ folder, agents, onClose }) {
               const raw = levels[uid] || '';
               const lv = _normalizeLevel(raw === '' ? undefined : raw);
               const isPM = lv.sandbox === 'PM';
+              const isPMO = lv.sandbox === 'PMO';
               const hasLevel = raw !== '';
+              const isElevated = isPM || isPMO;
               return html`
                 <div class="folder-agent-row" key=${uid}>
                   <span class="folder-agent-name"><span class="mono">${name}</span></span>
@@ -544,10 +556,13 @@ export function FolderSettingsModal({ folder, agents, onClose }) {
                               class=${`seg-btn${isPM && hasLevel ? ' is-active' : ''}`}
                               onClick=${() => updateAgentLevel(uid, 'sandbox', 'PM')}>PM</button>
                       <button type="button"
-                              class=${`seg-btn${!isPM && hasLevel ? ' is-active' : ''}`}
+                              class=${`seg-btn${isPMO && hasLevel ? ' is-active' : ''}`}
+                              onClick=${() => updateAgentLevel(uid, 'sandbox', 'PMO')}>PMO</button>
+                      <button type="button"
+                              class=${`seg-btn${!isElevated && hasLevel ? ' is-active' : ''}`}
                               onClick=${() => updateAgentLevel(uid, 'sandbox', 'SE')}>SE</button>
                     </div>
-                    ${!isPM && hasLevel ? html`
+                    ${!isElevated && hasLevel ? html`
                       <label class="write-toggle">
                         <input type="checkbox" checked=${lv.write}
                                onChange=${(e) => updateAgentLevel(uid, 'write', e.target.checked)} />
@@ -564,7 +579,26 @@ export function FolderSettingsModal({ folder, agents, onClose }) {
                 </div>`;
             })}
           </div>
-          <span class="hint">PM: 不受路径限制。SE: 受 Sandbox 路径限制。</span>
+          <span class="hint">PM: 不受路径限制 + DAG管理。PMO: 不受路径限制 + 升级响应。SE: 受 Sandbox 路径限制。</span>
+        </label>
+
+        <label class="field">
+          <span class="label">Auto-Supervisor 自动停滞检测</span>
+          <div class="seg" role="group" aria-label="Auto-Supervisor">
+            <button type="button"
+                    class=${`seg-btn${autoSup ? ' is-active' : ''}`}
+                    aria-pressed=${autoSup}
+                    onClick=${() => setAutoSup(true)}>
+              <span>✓ 已启用</span>
+            </button>
+            <button type="button"
+                    class=${`seg-btn${!autoSup ? ' is-active' : ''}`}
+                    aria-pressed=${!autoSup}
+                    onClick=${() => setAutoSup(false)}>
+              <span>已禁用</span>
+            </button>
+          </div>
+          <span class="hint">启用后，BOOS 代码层每 5 分钟检测本工作区：若所有 worker 空闲且有未完成任务，自动唤醒 PM。</span>
         </label>
       </div>
     </${Modal}>
@@ -640,54 +674,6 @@ function FolderSandboxList({ folders, onSet, onClear }) {
                         onClick=${() => onClear(f)}><${IconClose} /></button>` : null}
             </span>
           </div>`;
-      })}
-    </div>`;
-}
-
-// ── Workspace list ───────────────────────────────────────────────────
-function WorkspaceList() {
-  const ws = workspaces.value || [];
-  const inUseBy = '会话';
-  if (ws.length === 0) {
-    return html`<div class="entity-empty">暂无工作空间 — 启动时会自动创建。</div>`;
-  }
-  const onDelete = async (w) => {
-    if (w.inUse) return setToast(`「${w.name}」正被 ${inUseBy} 使用`, 'error');
-    const ok = await boosConfirm(
-      `删除工作空间「${w.name}」？这将删除目录及其中的所有仓库克隆。`,
-      { okLabel: '删除', danger: true },
-    );
-    if (!ok) return;
-    try {
-      await deleteWorkspace(w.name);
-      await loadWorkspaces();
-      setToast(`已删除 · ${w.name}`);
-    } catch (e) { setToast(e.message, 'error'); }
-  };
-  return html`
-    <div class="entity-list">
-      ${ws.map((w) => {
-        const repoCount = (w.repos || []).filter((r) => r.exists).length;
-        return html`
-        <div class="entity-row" key=${w.path}>
-          <span class="entity-row-icon"><${IconFolder} /></span>
-          <span class="entity-row-main">
-            <span class="entity-row-primary">
-              ${w.name}
-              ${w.inUse ? html`<span class="entity-row-badge tone-warn">使用中</span>` : null}
-            </span>
-            <span class="entity-row-secondary">
-              <span class="mono">${w.path}</span>
-              ${repoCount > 0 ? html` · ${repoCount} ${repoCount === 1 ? '个仓库' : '个仓库'}` : null}
-            </span>
-          </span>
-          <span class="entity-row-actions">
-            <button class=${`entity-row-action danger${w.inUse ? ' is-disabled' : ''}`}
-                    title=${w.inUse ? `正被 ${inUseBy} 使用` : '删除'}
-                    disabled=${w.inUse}
-                    onClick=${() => onDelete(w)}><${IconClose} /></button>
-          </span>
-        </div>`;
       })}
     </div>`;
 }
@@ -899,134 +885,6 @@ const ACTION_ICONS = {
   'session-move-down': IconChevronDown,
   'session-move-up':   IconChevronUp,
 };
-
-// ── HR Agent section ────────────────────────────────────────────────
-// TODO(#66): replace mock data with GET /api/hr/roles once backend is ready.
-
-const HR_LS_KEY = 'boos.hr-config';
-
-function loadHRConfig() {
-  try {
-    const raw = localStorage.getItem(HR_LS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return { enabled: false, roles: [], log: [] };
-}
-
-function saveHRConfig(cfg) {
-  try { localStorage.setItem(HR_LS_KEY, JSON.stringify(cfg)); } catch {}
-}
-
-// Mock role list — will be replaced by GET /api/hr/roles.
-const MOCK_ROLES = [
-  { id: 'frontend',   name: '前端工程师',   skill: 'Preact/xterm.js/CSS' },
-  { id: 'backend',    name: '后端工程师',   skill: 'Node.js/Express/PTY' },
-  { id: 'platform',   name: '平台集成工程师', skill: 'MCP/SSE/跨平台' },
-  { id: 'qa',         name: 'QA/可靠性工程师', skill: '测试/CI/压测' },
-];
-
-// Mock recruitment log entries.
-const MOCK_LOG = [
-  { roleId: 'frontend', agentName: '前端工程师',    status: 'active',  at: Date.now() - 3600000 },
-  { roleId: 'platform', agentName: '平台集成工程师', status: 'hired',   at: Date.now() - 7200000 },
-  { roleId: 'qa',       agentName: 'QA/可靠性工程师', status: 'pending', at: Date.now() - 86400000 },
-];
-
-const STATUS_MAP = {
-  active:  { label: '运行中', cls: 'is-running' },
-  hired:   { label: '已就职', cls: 'is-stopped' },
-  pending: { label: '招募中', cls: '' },
-};
-
-function HRAgentSection() {
-  const [cfg, setCfg] = useState(loadHRConfig);
-
-  const toggleEnabled = () => {
-    const next = { ...cfg, enabled: !cfg.enabled };
-    setCfg(next);
-    saveHRConfig(next);
-  };
-
-  const roles = cfg.roles.length ? cfg.roles : MOCK_ROLES;
-  const hrLog = cfg.log.length ? cfg.log : MOCK_LOG;
-
-  return html`
-    <div class="config-grid">
-      <div class="field">
-        <span class="label">状态</span>
-        <div class="seg" role="group" aria-label="HR Agent 状态">
-          <button type="button"
-                  class=${`seg-btn${cfg.enabled ? ' is-active' : ''}`}
-                  aria-pressed=${cfg.enabled}
-                  onClick=${toggleEnabled}>
-            <span>${cfg.enabled ? '✓ 已启用' : '已禁用'}</span>
-          </button>
-        </div>
-        <span class="hint">
-          ${cfg.enabled
-            ? 'HR Agent 将定期扫描资产路径并管理角色招募。'
-            : '启用后自动扫描资产并管理多 Agent 团队。'}
-        </span>
-      </div>
-    </div>
-
-    <div class="config-grid" style="margin-top: var(--s-4)">
-      <div class="field">
-        <span class="label">可用角色</span>
-        <span class="hint">
-          ⚠ API 待接入 — 当前为示例数据。后端就位后将展示 GET /api/hr/roles 返回的实际角色列表。
-        </span>
-        <div class="entity-list">
-          ${roles.map((r) => html`
-            <div class="entity-row" key=${r.id}>
-              <span class="entity-row-icon"><${IconTerminal} /></span>
-              <span class="entity-row-main">
-                <span class="entity-row-primary">${r.name}</span>
-                <span class="entity-row-secondary">
-                  <span class="mono">${r.id}</span> · ${r.skill}
-                </span>
-              </span>
-              <span class="entity-row-actions">
-                <span class="entity-row-badge tone-accent">就绪</span>
-              </span>
-            </div>
-          `)}
-        </div>
-      </div>
-    </div>
-
-    <div class="config-grid" style="margin-top: var(--s-4)">
-      <div class="field">
-        <span class="label">招募日志 · 最近 ${hrLog.length} 条</span>
-        <span class="hint">⚠ API 待接入 — 当前为示例数据。</span>
-        <div class="entity-list">
-          ${hrLog.map((entry, idx) => {
-            const st = STATUS_MAP[entry.status] || { label: entry.status, cls: '' };
-            return html`
-              <div class="entity-row" key=${idx}>
-                <span class=${`entity-row-icon ${st.cls}`}>
-                  <span class="tree-dot ${st.cls}"></span>
-                </span>
-                <span class="entity-row-main">
-                  <span class="entity-row-primary">
-                    ${entry.agentName}
-                    <span class="entity-row-badge ${st.cls}">${st.label}</span>
-                  </span>
-                  <span class="entity-row-secondary">
-                    <span class="mono">${entry.roleId}</span> · ${(() => {
-                      const d = new Date(entry.at);
-                      return d.toLocaleString('zh-CN', {
-                        month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit',
-                      });
-                    })()}
-                  </span>
-                </span>
-              </div>`;
-          })}
-        </div>
-      </div>
-    </div>`;
-}
 
 function KeybindingsList() {
   const map = keybindings.value;

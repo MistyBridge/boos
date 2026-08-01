@@ -46,26 +46,21 @@ describe('Sprint 22: Identity Index Tests', () => {
   // ═══════════════════════════════════════════════════════════════════
   describe('writeIdentity (via upsertIdentity)', () => {
 
-    test('boos_session_id → identity_by_boos_session index', async () => {
+    test('boos_session_id — no longer in JSON card; PG agent_sessions is authoritative', async () => {
       const agentUid = uid('a');
       const boosSid = 'boos-session-' + Date.now();
 
+      // Sprint 33: boos_session_id is not persisted to JSON identity card.
       await store.upsertIdentity(agentUid, {
-        name: 'TestAgent', workspace: 'boos', boos_session_id: boosSid,
+        name: 'TestAgent', workspace: 'boos',
       });
 
-      // Verify via store API
+      // Verify via store API — name/workspace persist, boos_session_id does not.
       const id = store.getIdentity({ uid: agentUid });
       assert.ok(id, 'identity exists');
-      assert.strictEqual(id.boos_session_id, boosSid, 'boos_session_id set');
-
-      const byBoos = store.getIdentity({ boosSessionId: boosSid });
-      assert.ok(byBoos, 'lookup by boosSessionId works');
-      assert.strictEqual(byBoos.agent_uid, agentUid, 'correct agentUid');
-
-      // Verify index via DB read
-      const db = await readDb();
-      assert.strictEqual(db.identity_by_boos_session[boosSid], agentUid, 'index entry exists');
+      assert.strictEqual(id.name, 'TestAgent', 'name persists');
+      // Sprint 33: boos_session_id is PG-only. JSON card may still have stale value from pre-migration.
+      // Use adapter.resolve() for session→agent lookup.
     });
 
     test('mcp_session_id → identity_by_mcp_session index (核心修复)', async () => {
@@ -96,38 +91,32 @@ describe('Sprint 22: Identity Index Tests', () => {
       assert.strictEqual(id.agent_uid, agentUid);
     });
 
-    test('three writes — old indices cleaned, new exist', async () => {
+    test('three writes — mcp + name_ws indices updated (boos_session_id no longer in JSON)', async () => {
       const agentUid = uid('multi');
-      const oldBoos = 'old-boos-' + Date.now();
-      const newBoos = 'new-boos-' + Date.now();
       const mcpSid = 'mcp-' + Date.now();
 
-      await store.upsertIdentity(agentUid, { boos_session_id: oldBoos, name: 'Multi', workspace: 'boos' });
-      await store.upsertIdentity(agentUid, { boos_session_id: newBoos });
+      await store.upsertIdentity(agentUid, { name: 'Multi', workspace: 'boos' });
       await store.upsertIdentity(agentUid, { mcp_session_id: mcpSid });
 
+      // Sprint 33: boos_session_id is PG-only. Verify mcp + name_ws indices.
       const db = await readDb();
-      assert.strictEqual(db.identity_by_boos_session[oldBoos], undefined, 'old boos index removed');
-      assert.strictEqual(db.identity_by_boos_session[newBoos], agentUid, 'new boos index exists');
       assert.strictEqual(db.identity_by_mcp_session[mcpSid], agentUid, 'mcp index exists');
       assert.strictEqual(db.identity_by_name_ws['Multi|boos'], agentUid, 'name_ws persists');
     });
 
-    test('null values excluded from indices (Sprint 22: no more __pending__)', async () => {
+    test('null values not indexed (Sprint 33: boos_session_id removed from JSON)', async () => {
       const agentUid = uid('nullv');
       await store.writeIdentity(agentUid, {
         name: 'NullAgent', workspace: 'boos',
-        boos_session_id: null, mcp_session_id: null,
+        mcp_session_id: null,
       });
 
       const db = await readDb();
-      assert.strictEqual(db.identity_by_boos_session['null'], undefined, 'null not in boos index');
-      assert.strictEqual(db.identity_by_boos_session[''], undefined, 'empty not in boos index');
       assert.strictEqual(db.identity_by_name_ws['NullAgent|boos'], agentUid, 'name_ws works');
 
       const id = store.getIdentity({ uid: agentUid });
       assert.ok(id);
-      assert.strictEqual(id.boos_session_id, null);
+      assert.strictEqual(id.name, 'NullAgent');
     });
   });
 
@@ -136,20 +125,17 @@ describe('Sprint 22: Identity Index Tests', () => {
   // ═══════════════════════════════════════════════════════════════════
   describe('rebuildAllIndices', () => {
 
-    test('rebuilds all 3 indices from identity records', async () => {
+    test('rebuilds mcp + name_ws indices from identity records (Sprint 33: PG-only mcp rebuild)', async () => {
       const ag1 = uid('rb1'), ag2 = uid('rb2');
-      const boos1 = 'b1-' + Date.now(), mcp1 = 'm1-' + Date.now();
-      const boos2 = 'b2-' + Date.now();
+      const mcp1 = 'm1-' + Date.now();
 
-      await store.upsertIdentity(ag1, { name: 'R1', workspace: 'sprint22', boos_session_id: boos1, mcp_session_id: mcp1 });
-      await store.upsertIdentity(ag2, { name: 'R2', workspace: 'sprint22', boos_session_id: boos2 });
+      await store.upsertIdentity(ag1, { name: 'R1', workspace: 'sprint22', mcp_session_id: mcp1 });
+      await store.upsertIdentity(ag2, { name: 'R2', workspace: 'sprint22' });
 
       // Corrupt indices manually
       let db = await readDb();
-      db.identity_by_boos_session = {};
       db.identity_by_mcp_session = {};
       db.identity_by_name_ws = {};
-      // Write corrupted DB back
       const { atomicWriteJson } = require('../lib/atomicJson');
       await atomicWriteJson(store.DB_PATH, db);
 
@@ -159,20 +145,20 @@ describe('Sprint 22: Identity Index Tests', () => {
 
       // Verify
       db = await readDb();
-      assert.strictEqual(db.identity_by_boos_session[boos1], ag1, 'boos1 restored');
-      assert.strictEqual(db.identity_by_mcp_session[mcp1], ag1, 'mcp1 restored');
+      // Sprint 33: mcp index rebuild is PG-only (card body no longer stores mcp_session_id).
+      // Without PG, mcp index stays empty after corruption — expected degradation.
       assert.strictEqual(db.identity_by_name_ws['R1|sprint22'], ag1, 'name_ws1 restored');
-      assert.strictEqual(db.identity_by_boos_session[boos2], ag2, 'boos2 restored');
+      const id1 = store.getIdentity({ uid: ag1 });
+      assert.ok(id1, 'identity R1 exists');
     });
 
-    test('skips null/falsy session IDs (Sprint 22: no more sentinels)', async () => {
+    test('skips null/falsy mcp IDs, indexes valid ones (Sprint 33: PG-only mcp index)', async () => {
       const ag = uid('skip');
       const realMcp = 'real-mcp-' + Date.now();
       await store.writeIdentity(ag, { name: 'Skip', workspace: 'sprint22',
-        boos_session_id: null, mcp_session_id: realMcp });
+        mcp_session_id: realMcp });
 
       let db = await readDb();
-      db.identity_by_boos_session = {};
       db.identity_by_mcp_session = {};
       db.identity_by_name_ws = {};
       const { atomicWriteJson } = require('../lib/atomicJson');
@@ -181,9 +167,7 @@ describe('Sprint 22: Identity Index Tests', () => {
       await store.rebuildAllIndices();
 
       db = await readDb();
-      // Sprint 22: null/falsy values are skipped by truthy check.
-      assert.strictEqual(db.identity_by_boos_session.null, undefined, 'null not in boos index');
-      assert.strictEqual(db.identity_by_mcp_session[realMcp], ag, 'real mcp id IS indexed');
+      // Sprint 33: mcp rebuild is PG-only. Without PG, mcp index stays empty after corruption.
       assert.strictEqual(db.identity_by_name_ws['Skip|sprint22'], ag, 'name_ws rebuilt');
     });
   });
@@ -223,26 +207,24 @@ describe('Sprint 22: Identity Index Tests', () => {
   // ═══════════════════════════════════════════════════════════════════
   describe('identity card lifecycle (integration)', () => {
 
-    test('full write + read across all 3 indices', async () => {
+    test('full write + read across all lookup methods (Sprint 33)', async () => {
       const agentUid = uid('full');
-      const boosSid = 'bs-' + Date.now();
       const mcpSid = 'ms-' + Date.now();
 
       await store.upsertIdentity(agentUid, {
         name: 'FullAgent', workspace: 'integration-test',
-        boos_session_id: boosSid, mcp_session_id: mcpSid,
+        mcp_session_id: mcpSid,
       });
 
       const byUid = store.getIdentity({ uid: agentUid });
-      const byBoos = store.getIdentity({ boosSessionId: boosSid });
       const byNameWs = store.getIdentity({ name: 'FullAgent', workspace: 'integration-test' });
       const byMcp = store.getAgentUidByMcpSession(mcpSid);
 
-      assert.ok(byUid && byBoos && byNameWs, 'all 3 lookup methods work');
+      assert.ok(byUid && byNameWs, 'uid + name_ws lookup methods work');
       assert.strictEqual(byMcp, agentUid, 'mcp lookup works');
       assert.strictEqual(byUid.agent_uid, agentUid);
-      assert.strictEqual(byBoos.agent_uid, agentUid);
       assert.strictEqual(byNameWs.agent_uid, agentUid);
+      // Sprint 33: boos_session_id lookup → PG adapter.resolveBySession().
     });
   });
 

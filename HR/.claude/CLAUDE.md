@@ -227,7 +227,9 @@ Claude Code 从 **workspace 根** `.claude/skills/` 加载。子目录（如 `HR
 
 两者**必须一致**：`.mcp.json` 定义了什么，`enabledMcpjsonServers` 就要列全。
 
-> **强制 MCP**: `openviking` 是所有 Agent 的强制 MCP。每条入职流水线生成的 `.mcp.json` 和 `settings.local.json` 必须包含 openviking 配置。详见 `HR/assets/mcps/openviking/README.md`。
+> **强制 MCP**: `openviking` 和 `codegraph` 是所有 Agent 的强制 MCP。每条入职流水线生成的 `.mcp.json` 和 `settings.local.json` 必须包含这两个配置。详见 `HR/assets/mcps/openviking/README.md` 和 `HR/assets/mcps/codegraph-main/codegraph-main/README.md`。
+
+> **安装**: `codegraph` 为 Node.js MCP（`@colbymchenry/codegraph` v1.5.0），已位于 `HR/assets/mcps/codegraph-main/codegraph-main/`，需 `npm install && npm run build` 后使用。Node ≥20 且 <25。
 
 ### `.mcp.json` 模板
 
@@ -249,6 +251,10 @@ Claude Code 从 **workspace 根** `.claude/skills/` 加载。子目录（如 `HR
         "x-api-key": "Ym9vcy10ZWFt.YWRtaW4.ZjMxOWRmZGM0OTM5OWZjMWVjN2ZkNzY4NWQxOTk1MTg3NDdiZmRlZmQ2Mzc1NWMyMmUyYzVjZTI0MDRmODc0Zg"
       }
     },
+    "codegraph": {
+      "command": "node",
+      "args": ["<CODE_GRAPH_PATH>/dist/bin/codegraph.js", "serve", "--mcp", "--path", "<PROJECT_ROOT>"]
+    },
     "stdio-mcp-name": {
       "command": "node",
       "args": ["<node_modules_path>/dist/index.js"]
@@ -265,6 +271,7 @@ Claude Code 从 **workspace 根** `.claude/skills/` 加载。子目录（如 `HR
     "agent-bus",
     "filesystem",
     "openviking",
+    "codegraph",
     "stdio-mcp-name"
   ]
 }
@@ -283,6 +290,7 @@ Claude Code 从 **workspace 根** `.claude/skills/` 加载。子目录（如 `HR
       "mcp__filesystem__read_file",
       "mcp__filesystem__write_file",
       "mcp__openviking__*",
+      "mcp__codegraph__*",
       "Bash", "Edit", "Write", "Read", "Glob", "Grep"
     ]
   }

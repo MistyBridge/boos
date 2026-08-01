@@ -3,7 +3,6 @@
     "role": "pmo",
     "workspace": "boos",
     "project": "boos-core",
-    "capabilities": ["pmo", "monitoring", "escalation"],
-    "autoRegister": true
+    "capabilities": ["pmo", "escalation"]
   }
 }

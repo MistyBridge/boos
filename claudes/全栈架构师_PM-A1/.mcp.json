@@ -3,8 +3,8 @@
     "filesystem": {
       "command": "node",
       "args": [
-        "D:/AI IDE/CC_BOOS/claudes/.mcp/filesystem/dist/index.js",
-        "D:/AI IDE/CC_BOOS"
+        "D:\\AI IDE\\CC_BOOS\\claudes\\.mcp\\filesystem\\dist\\index.js",
+        "D:\\AI IDE\\CC_BOOS"
       ]
     },
     "sequential-thinking": {
@@ -32,7 +32,10 @@
       "command": "node",
       "args": [
         "C:/Users/admin/.boos/mcp-proxy.js"
-      ]
+      ],
+      "env": {
+        "BOOS_SESSION_ID": "sess-ms31vjhf-l9i6xk"
+      }
     },
     "openviking": {
       "type": "http",

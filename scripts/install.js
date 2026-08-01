@@ -13,6 +13,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
 function log(msg)  { process.stdout.write(`[boos install] ${msg}\n`); }

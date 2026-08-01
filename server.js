@@ -102,6 +102,18 @@ const IS_DEV = !__dirname.includes(`${path.sep}node_modules${path.sep}`) && proc
   }
 }
 
+// Serve node_modules for local ESM imports (preact, htm, @preact/signals).
+// These packages ship .module.js ESM files that work in browsers.
+  // xterm.js + addons pre-bundled into public/vendor/ via esbuild — zero external deps.
+{
+  const nodeModulesDir = path.join(__dirname, 'node_modules');
+  try {
+    if (require('node:fs').statSync(nodeModulesDir).isDirectory()) {
+      app.use('/node_modules', express.static(nodeModulesDir, { maxAge: '7d' }));
+    }
+  } catch {}
+}
+
 // ── Embedded Agent-Bus MCP ─────────────────────────────────────────
 // Mounted directly on this Express instance — no separate process, no
 // separate port. Agents connect via http://127.0.0.1:{port}/mcp/sse.
@@ -279,21 +291,43 @@ require('./routes/hr').register(app, { hrAgent: require('./lib/hrAgent') });
 require('./routes/archive').register(app, { asyncH });        // Sprint 9: archive system
 require('./routes/agents').register(app, { asyncH });        // Sprint 9: agent-bus ↔ canvas bridge
 require('./routes/agent-bus-tasks').register(app, { asyncH });  // Sprint 17 A1: task query API
+require('./routes/dags').register(app, { asyncH });             // Sprint 34: DAG REST API
 require('./routes/knowledge').register(app, { asyncH });     // Sprint 10: shared knowledge base
+require('./routes/workspaceConfig').register(app, { asyncH, workspaceConfig: require('./lib/workspaceConfig') }); // Sprint 32
 
 function listenWithFallback(preferred) {
   return new Promise((resolve, reject) => {
-    const attempt = (port, tries) => {
-      const server = app.listen(port);
-      server.once('listening', () => resolve({ server, port: server.address().port }));
+    const attempt = (retries) => {
+      const server = app.listen(preferred);
+      server.once('listening', () => resolve({ server, port: preferred }));
       server.once('error', (err) => {
         if (err.code !== 'EADDRINUSE') return reject(err);
-        if (tries < 9) attempt(port + 1, tries + 1);
-        else if (tries === 9) attempt(0, tries + 1);
-        else reject(err);
+        if (retries >= 3) return reject(new Error(`端口 ${preferred} 被占用，3 次尝试后仍无法释放`));
+        // reclaimPortFromOldInstance 已在启动前释放，这里是竞态兜底：
+        // 直接杀占用的进程，重试同一端口。
+        server.close();
+        (async () => {
+          try {
+            const { execSync } = require('node:child_process');
+            const cmd = process.platform === 'win32'
+              ? `netstat -ano | findstr :${preferred} | findstr LISTENING`
+              : `lsof -i :${preferred} -t`;
+            const output = execSync(cmd, { encoding: 'utf-8', timeout: 2000 }).trim();
+            const m = output.match(/\d+$/);
+            if (m) {
+              const pid = parseInt(m[0], 10);
+              if (pid && pid !== process.pid) {
+                console.log(`[boos] 强制终止 PID ${pid} (占用端口 ${preferred})`);
+                try { process.kill(pid, 'SIGKILL'); } catch {}
+              }
+            }
+          } catch {}
+          await new Promise(r => setTimeout(r, 2000));
+          attempt(retries + 1);
+        })();
       });
     };
-    attempt(preferred, 0);
+    attempt(0);
   });
 }
 
@@ -347,20 +381,83 @@ function listenWithFallback(preferred) {
 
   if (process.env.BOOS_NO_AGENT_BUS_WATCH !== '1') {
     try {
-      const { bootstrapIdentities, pruneOldTasks } = require('./lib/agentBus/store');
+      const { bootstrapIdentities } = require('./lib/agentBus/store');
       bootstrapIdentities().catch(e => console.warn('[boos] bootstrapIdentities failed:', e.message));
-      pruneOldTasks().catch(e => console.warn('[boos] pruneOldTasks failed:', e.message));
-      setInterval(() => { pruneOldTasks().catch(e => console.warn('[boos] pruneOldTasks failed:', e.message)); }, 6 * 3600_000).unref();
+
+      // Sprint 35: migrate legacy tasks from shared agent-bus.json to per-agent inbox files.
+      // One-time migration — subsequent starts will skip if inbox files already exist.
+      const fs = require('fs');
+      const path = require('path');
+      const { DATA_DIR } = require('./lib/agentBus/storeCore');
+      const legacyPath = path.join(DATA_DIR, 'agent-bus.json');
+      const inboxDir = path.join(DATA_DIR, 'agent-bus', 'inbox');
+      if (fs.existsSync(legacyPath)) {
+        const inboxExists = fs.existsSync(inboxDir) && fs.readdirSync(inboxDir).length > 0;
+        if (!inboxExists) {
+          try {
+            const db = JSON.parse(fs.readFileSync(legacyPath, 'utf-8'));
+            const tasks = Object.values(db.tasks || {});
+            if (tasks.length > 0) {
+              const { importFromLegacy } = require('./lib/agentBus/inboxStore');
+              importFromLegacy(db).then(n => {
+                console.log('[boos] inbox migration:', n, 'tasks moved to per-agent inboxes');
+                // Clean up tasks from legacy file (keep agents/sessions/identities).
+                return new Promise((resolve) => {
+                  const { _load } = require('./lib/agentBus/storeCore');
+                  const { withFileLock } = require('./lib/atomicJson');
+                  withFileLock(legacyPath, async () => {
+                    const d = await _load();
+                    d.tasks = {};
+                    const { _save } = require('./lib/agentBus/storeCore');
+                    const tmp = path.join(path.dirname(legacyPath),
+                      `.${path.basename(legacyPath)}.tmp.${process.pid}.${Date.now().toString(36)}`);
+                    await fs.promises.writeFile(tmp, JSON.stringify(d, null, 2));
+                    await fs.promises.rename(tmp, legacyPath);
+                    resolve(true);
+                  }).catch(() => resolve(false));
+                }).then(ok => {
+                  console.log('[boos] legacy tasks cleaned from agent-bus.json:', ok);
+                });
+              }).catch(e => console.warn('[boos] inbox migration failed:', e.message));
+            }
+          } catch (e) { console.warn('[boos] inbox migration: legacy read failed:', e.message); }
+        }
+      }
+
+      // Rebuild in-memory task index on startup.
+      const { rebuildTaskIndex } = require('./lib/agentBus/queue');
+      rebuildTaskIndex().catch(e => console.warn('[boos] task index rebuild failed:', e.message));
+
       require('./lib/agentBus/notifications').start('boos').catch(e => {
         console.warn('[boos] collaboration loop init failed:', e.message);
       });
     } catch (e) { console.warn('[boos] agent-bus notifications failed to start:', e.message); }
   }
 
+  // Auto-Supervisor: code-layer background loop for stalled-project detection.
+  // Runs UNCONDITIONALLY — independent of BOOS_NO_AGENT_BUS_WATCH gate.
+  // Has its own internal guards (started flag, workspace check, folder toggles).
+  try {
+    require('./lib/agentBus/autoSupervisor').start();
+  } catch (e) { console.warn('[boos] auto-supervisor start failed:', e.message); }
+
   try { require('./lib/archive').startPeriodicPrune(); }
   catch (e) { console.warn('[boos] archive system failed to start:', e.message); }
 
-  // Prewarm tunnel probe so Remote tab loads instantly.
+  // Agent-bus task lifecycle: auto-archive terminal tasks on startup,
+	  // then every 6 hours. Newly terminal tasks are auto-archived immediately
+	  // by updateTaskStatus → _autoArchiveTask.
+	  {
+	    const store = require('./lib/agentBus/store');
+	    store.pruneOldTasks(0).then((n) => {
+	      if (n > 0) console.log('[boos] startup auto-archive:', n, 'stale terminal tasks');
+	    }).catch(() => {});
+	    setInterval(() => {
+	      store.pruneOldTasks(0).catch(() => {});
+	    }, 6 * 3600_000).unref();
+	  }
+
+	  // Prewarm tunnel probe so Remote tab loads instantly.
   try {
     tunnel.probe(true).catch(() => {});
   } catch {}

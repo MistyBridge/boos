@@ -38,7 +38,10 @@
       "command": "node",
       "args": [
         "C:/Users/admin/.boos/mcp-proxy.js"
-      ]
+      ],
+      "env": {
+        "BOOS_SESSION_ID": "sess-ms31vkij-m2oz7w"
+      }
     },
     "openviking": {
       "type": "http",

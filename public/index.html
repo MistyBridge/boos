@@ -93,12 +93,10 @@
         } catch (_) {}
       })();
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&family=JetBrains+Mono:wght@400..600&display=swap"
-    />
+    <!-- Google Fonts removed — unreachable from this network.
+         CSS font stacks fall through to system fonts:
+           body:  ui-sans-serif, system-ui, sans-serif
+           mono:  Cascadia Mono, Consolas, monospace -->
     <link rel="stylesheet" href="./css/tokens.css?v=1.1.0" />
     <link rel="stylesheet" href="./css/base.css?v=1.1.0" />
     <link rel="stylesheet" href="./css/layout.css?v=1.1.0" />
@@ -120,23 +118,81 @@
     <script type="importmap">
       {
         "imports": {
-          "preact":             "https://esm.sh/preact@10.27.0",
-          "preact/hooks":       "https://esm.sh/preact@10.27.0/hooks",
-          "preact/compat":      "https://esm.sh/preact@10.27.0/compat",
-          "@preact/signals":    "https://esm.sh/@preact/signals@1.3.2?deps=preact@10.27.0",
-          "htm":                "https://esm.sh/htm@3.1.1",
-          "@xterm/xterm":       "https://esm.sh/@xterm/xterm@5.5.0",
-          "@xterm/addon-fit":   "https://esm.sh/@xterm/addon-fit@0.10.0?deps=@xterm/xterm@5.5.0",
-          "@xterm/addon-web-links": "https://esm.sh/@xterm/addon-web-links@0.11.0?deps=@xterm/xterm@5.5.0",
-          "@xterm/addon-clipboard": "https://esm.sh/@xterm/addon-clipboard@0.1.0?deps=@xterm/xterm@5.5.0",
-          "@xterm/addon-serialize": "https://esm.sh/@xterm/addon-serialize@0.14.0?deps=@xterm/xterm@5.5.0"
+          "preact":             "/node_modules/preact/dist/preact.module.js",
+          "preact/hooks":       "/node_modules/preact/hooks/dist/hooks.module.js",
+          "preact/compat":      "/node_modules/preact/compat/dist/compat.module.js",
+          "@preact/signals":    "/node_modules/@preact/signals/dist/signals.module.js",
+          "@preact/signals-core": "/node_modules/@preact/signals-core/dist/signals-core.module.js",
+          "htm":                "/node_modules/htm/dist/htm.module.js",
+          "@xterm/xterm":       "/vendor/xterm.js",
+          "@xterm/addon-fit":   "/vendor/xterm-fit.js",
+          "@xterm/addon-web-links": "/vendor/xterm-web-links.js",
+          "@xterm/addon-clipboard": "/vendor/xterm-clipboard.js",
+          "@xterm/addon-serialize": "/vendor/xterm-serialize.js"
         }
       }
     </script>
-    <link rel="stylesheet" href="https://esm.sh/@xterm/xterm@5.5.0/css/xterm.css" />
+    <link rel="stylesheet" href="/vendor/xterm.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div style="padding:40px;font-family:sans-serif;color:#b3614a;text-align:center">
+        <p style="font-size:24px;font-weight:bold;margin:0 0 8px">🔌 BOOS 加载中...</p>
+        <p id="boos-diag" style="font-size:13px;color:#8a8475;margin:0">如果此文字可见，HTML/CSS 正常 — JS 初始化失败</p>
+      </div>
+    </div>
+    <script>
+      // Global error display: show JS errors on the page so we can see
+      // what's failing without needing to open DevTools.
+      (function() {
+        var diagEl = document.getElementById('boos-diag');
+        function showError(msg) {
+          if (diagEl) { diagEl.textContent = msg; diagEl.style.color = '#b73f3f'; }
+          console.error('[boos:diag]', msg);
+        }
+        // addEventListener('error') catches module load failures (static import)
+        window.addEventListener('error', function(evt) {
+          var src = (evt.target && evt.target.src) || evt.filename || '';
+          showError('❌ ' + evt.message + ' [' + src.split('/').pop() + ':' + evt.lineno + ']');
+        }, true); // capturing phase to catch errors from <script type="module">
+        window.addEventListener('unhandledrejection', function(evt) {
+          showError('❌ Promise: ' + (evt.reason ? (evt.reason.message || String(evt.reason)) : 'unknown'));
+        });
+      })();
+    </script>
+    <script>
+      // Self-healing: unregister ALL service workers, then reload.
+      // Fixes stale-cache blank-page after frontend dependency changes.
+      (function() {
+        if ('serviceWorker' in navigator && !location.hash.includes('boos-sw-cleaned')) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            if (regs.length) {
+              console.log('[boos:diag] Cleaning ' + regs.length + ' stale service worker(s)...');
+              return Promise.all(regs.map(function(r) { return r.unregister(); }));
+            }
+          }).then(function() {
+            if (sessionStorage.getItem('boos-sw-cleaned')) return;
+            sessionStorage.setItem('boos-sw-cleaned', '1');
+            console.log('[boos:diag] SW cleaned, reloading...');
+            location.reload();
+          }).catch(function(){});
+        }
+      })();
+    </script>
+    <script>
+      // Diagnostic: check if page basics work
+      window.__BOOS_DIAG = { html: true, time: Date.now() };
+      console.log('[boos:diag] HTML loaded, importmap:', !!document.querySelector('script[type="importmap"]'));
+      // Check if Service Worker is active
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          console.log('[boos:diag] SW registrations:', regs.length);
+          regs.forEach(function(r, i) {
+            console.log('[boos:diag] SW#' + i, 'scope=' + r.scope, 'active=' + !!r.active, r.active ? 'state=' + r.active.state : '');
+          });
+        });
+      }
+    </script>
     <script type="module" src="./js/main.js?v=1.1.0.20260726"></script>
     <script>
       // Dev hot-reload — only active when the page itself loads from a

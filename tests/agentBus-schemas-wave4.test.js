@@ -16,7 +16,8 @@ describe('Agent-Bus Wave 4 (#63, #64)', () => {
   test('#64 wake_all tool exists with correct schema', () => {
     const wa = TOOLS.find(t => t.name === 'wake_all');
     assert.ok(wa, 'wake_all not found');
-    assert.ok(wa.description.includes('supervisor'));
+    // Sprint 31: wake_all no longer restricted to supervisors — any registered agent can broadcast wake.
+    assert.ok(wa.description.includes('broadcast wake') || wa.description.includes('supervisor'));
     const p = wa.inputSchema.properties;
     assert.ok(p.message);
     assert.ok(p.urgency);

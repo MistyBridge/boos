@@ -202,9 +202,10 @@ function register(app, deps) {
                 workspace: matched.workspace, role: matched.role || 'worker',
               });
 
-              // P2 fix: update filesystem MCP config with agentUid for PM/supervisor check.
-              // If agent is supervisor, grant full project access; otherwise, sandbox to folder rootPath.
-              if (matched.role === 'supervisor' || (matched.pm_of && matched.pm_of.length > 0)) {
+              // Sprint 32: update MCP filesystem config with agentUid for PM/PMO check.
+              // This handles: supervisor role, pmo role, and folder-level PM/PMO from agentLevels.
+              // The sandbox.getFilesystemMcpConfig function itself decides based on _isPM().
+              if (matched && matched.uid) {
                 const sandbox = require('../lib/sandbox');
                 const fsConfig = await sandbox.getFilesystemMcpConfig({
                   folderId: record.folderId,
@@ -281,24 +282,55 @@ function register(app, deps) {
     const cli = findCliById(cfg, record.cliId);
     if (!cli) return res.status(400).json({ error: `CLI ${record.cliId} no longer configured` });
     try {
+      // Sprint 32: Update MCP filesystem config before resume — folder rootPath
+      // and agentLevels (PM/PMO) may have changed via FolderSettingsModal.
+      const sandbox = require('../lib/sandbox');
+      const store = require('../lib/agentBus/store');
+      // Sprint 33: Lookup identity by cliSessionId (agent's UID).
+      const identity = record.cliSessionId ? store.getIdentity({ uid: record.cliSessionId }) : null;
+      const fsConfig = await sandbox.getFilesystemMcpConfig({
+        folderId: record.folderId,
+        agentUid: record.cliSessionId || identity?.agent_uid,
+      });
+      const mcpPath = require('node:path').join(record.cwd || process.cwd(), '.mcp.json');
+      let mcp; try { mcp = JSON.parse(await require('node:fs/promises').readFile(mcpPath, 'utf-8')); } catch { mcp = {}; }
+      mcp.mcpServers = mcp.mcpServers || {};
+      mcp.mcpServers.filesystem = fsConfig;
+      await require('node:fs/promises').writeFile(mcpPath, JSON.stringify(mcp, null, 2), 'utf-8');
+    } catch { /* best-effort */ }
+
+    try {
       const launched = await spawnSessionRecord({ record, cli, cfg, body: req.body, resume: true });
-      // Sprint 13: update agent identity card after session resume.
+      // Sprint 33: update agent identity card after session resume.
       try {
         const store = require('../lib/agentBus/store');
-        const identity = store.getIdentityByBoosSession(record.id);
+        // Lookup identity by cliSessionId (agent's UID).
+        const identity = record.cliSessionId ? store.getIdentity({ uid: record.cliSessionId }) : null;
         if (identity) {
-          await store.upsertIdentity(identity.agent_uid, { pty_pid: launched?.pid || null, cwd: record.cwd });
+          await store.upsertIdentity(record.cliSessionId, { pty_pid: launched?.pid || null, cwd: record.cwd });
         } else {
           const allAgents = store.listAllAgents();
-          const matched = allAgents.find(a => require('path').basename(record.cwd || '') === a.name);
+          const matched = allAgents.find(a => record.cliSessionId && a.uid === record.cliSessionId);
           if (matched) {
             await store.upsertIdentity(matched.uid, {
+              cli_session_id: record.cliSessionId || undefined,
               boos_session_id: record.id, cwd: record.cwd,
               pty_pid: launched?.pid || null, name: matched.name,
               workspace: matched.workspace, role: matched.role || 'worker',
             });
           }
         }
+        // Sprint 33: Sync to PG adapter (authoritative routing).
+        try {
+          const adapter = require('../lib/identityAdapter');
+          await adapter.linkSession(record.cliSessionId, record.id, record.cwd);
+          if (launched?.pid) {
+            await adapter.upsert(record.cliSessionId, {
+              pty_pid: launched.pid,
+              cwd: record.cwd,
+            });
+          }
+        } catch { /* PG unavailable — no-op */ }
       } catch (e) { /* best-effort */ }
       res.json({ launched });
     } catch (e) {

@@ -23,6 +23,10 @@
       "headers": {
         "x-api-key": "Ym9vcy10ZWFt.YWRtaW4.ZjMxOWRmZGM0OTM5OWZjMWVjN2ZkNzY4NWQxOTk1MTg3NDdiZmRlZmQ2Mzc1NWMyMmUyYzVjZTI0MDRmODc0Zg"
       }
+    },
+    "codegraph": {
+      "command": "node",
+      "args": ["D:\\AI IDE\\CC_BOOS\\HR\\assets\\mcps\\codegraph-main\\codegraph-main\\dist\\bin\\codegraph.js", "serve", "--mcp", "--path", "D:\\AI IDE\\CC_BOOS"]
     }
   }
 }
