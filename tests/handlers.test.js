@@ -25,6 +25,7 @@ const CLEAR_MODS = [
   '../lib/agentBus/handlersDag', '../lib/agentBus/handlersSession',
   '../lib/agentBus/notifications', '../lib/agentBus/notificationsWake',
   '../lib/agentBus/heartbeat', '../lib/agentBus/collaborationLoop',
+  '../lib/agentBus/inboxStore', '../lib/agentBus/auth',
   '../lib/agentBus/taskAnalytics', '../lib/agentBus/taskTimeout',
   '../lib/agentBus/fileLock', '../lib/agentBus/constraints',
   '../lib/agentBus/transport', '../lib/agentBus/autoSupervisor',
@@ -371,7 +372,6 @@ describe('check_inbox + respond_task flow', () => {
 
   test('full send → check → respond cycle', async () => {
     const { dispatch } = require('../lib/agentBus/handlers');
-    const store = require('../lib/agentBus/store');
     const pm = await registerPm('flow-pm');
     const worker = await registerWorker('flow-w');
     const pmCtx = makeCtx(pm);
@@ -395,10 +395,12 @@ describe('check_inbox + respond_task flow', () => {
     }, wCtx);
     assert.ok(responded.ok);
 
-    // 4. Task is completed
-    const final = store.getTask(taskId);
-    assert.strictEqual(final.status, 'completed');
-    assert.strictEqual(final.result, 'Done!');
+    // 4. Task is completed — archived to JSONL, no longer in old shared store.
+    const queue = require('../lib/agentBus/queue');
+    const archived = await queue.getArchivedTask(taskId);
+    assert.ok(archived);
+    assert.strictEqual(archived.status, 'completed');
+    assert.strictEqual(archived.result, 'Done!');
   });
 
   test('check_inbox returns empty when no tasks', async () => {
@@ -461,7 +463,7 @@ describe('cancel_task', () => {
 
   test('sender can cancel their own task', async () => {
     const { dispatch } = require('../lib/agentBus/handlers');
-    const store = require('../lib/agentBus/store');
+    const queue = require('../lib/agentBus/queue');
     const pm = await registerPm('cancel-pm');
     const worker = await registerWorker('cancel-w');
 
@@ -474,13 +476,14 @@ describe('cancel_task', () => {
     }, makeCtx(pm));
     assert.ok(result.ok);
 
-    const task = store.getTask(sent.task.task_id);
+    // Task is archived after cancel — check via getArchivedTask.
+    const task = await queue.getArchivedTask(sent.task.task_id);
+    assert.ok(task);
     assert.strictEqual(task.status, 'cancelled');
   });
 
   test('supervisor can cancel any task in workspace', async () => {
     const { dispatch } = require('../lib/agentBus/handlers');
-    const store = require('../lib/agentBus/store');
     const pm = await registerPm('sup-cancel-pm');
     const worker = await registerWorker('sup-cancel-w');
 
@@ -747,7 +750,7 @@ describe('handlers edge cases', () => {
 
   test('respond_task with metadata', async () => {
     const { dispatch } = require('../lib/agentBus/handlers');
-    const store = require('../lib/agentBus/store');
+    const queue = require('../lib/agentBus/queue');
     const pm = await registerPm('rmd-pm');
     const worker = await registerWorker('rmd-w');
 
@@ -766,7 +769,9 @@ describe('handlers edge cases', () => {
     }, makeCtx(worker));
     assert.ok(responded.ok);
 
-    const task = store.getTask(sent.task.task_id);
+    // Task is archived after respond — check via getArchivedTask.
+    const task = await queue.getArchivedTask(sent.task.task_id);
+    assert.ok(task);
     assert.strictEqual(task.status, 'completed');
   });
 });
