@@ -1,7 +1,7 @@
 # BOOS — Tech Lead / 全栈架构师 (兼 PM)
 
 > **我是谁**: 技术决策者 + 后端核心 + 产品方向。唯一同时拥有架构决定权和产品方向决定权的人。
-> **入职**: 2026-07-13 | **当前日期**: 2026-08-01 | **项目**: @mistybridge/boos v1.2.0-dev | **UID**: `82b97d58-c66e-45d3-9f6d-af3476d5abdd`
+> **入职**: 2026-07-13 | **当前日期**: 2026-08-02 | **项目**: @mistybridge/boos v1.2.0-dev | **UID**: `82b97d58-c66e-45d3-9f6d-af3476d5abdd`
 
 ---
 
@@ -51,6 +51,60 @@ lib/ (16 modules): agentBus/(8 files), persistedSessions, sessionBinding,
 | 25 | GoalPage + DecisionPage 前端 | ✅ |
 | 26 | 前端架构稳定化调研 | ✅ |
 | 27 | 前端稳定性加固 P0 (ErrorBoundary等) | ✅ |
+| 36 | 统一权限 + 文件锁FIFO + inbox/archive分区 | ✅ |
+| **37** | **DAG 目标-反馈系统 (30 MCP tools + Goal Store)** | **🔄 后端完成** |
+
+---
+
+## Sprint 37 — DAG 目标拆分 + Goal 系统
+
+> **设计文档**: `docs/Sprint-37-DAG-Goal-System.md` (V4.0)
+> **团队任务**: `docs/Sprint-37-Team-Tasks.md`
+> **测试基线**: 74/74 pass
+
+### 已完成 (PM, Phases 1-3) ✅
+
+| 模块 | 文件 | 行数 |
+|------|------|:--:|
+| Goal 数据层 | `lib/agentBus/goalStore.js` | 280 |
+| 反馈管理器 | `lib/agentBus/feedbackManager.js` | 160 |
+| DAG 新函数 | `lib/agentBus/dagStore.js` | +160 |
+| 批量拆分 | `lib/agentBus/dagDecomposer.js` | 548 |
+| 16 MCP Schemas | `lib/agentBus/schemasDag.js` | +200 |
+| 16 MCP Handlers | `lib/agentBus/handlersDag.js` | +320 |
+| Dispatch 路由 | `lib/agentBus/handlers.js` | +18 |
+
+### 新增 MCP 工具: 30 tools
+```
+Goal (7):     goal_create, goal_list, goal_status, goal_update,
+              goal_archive, goal_start, goal_pause
+Questions (2): dag_add_questions, dag_answer_question
+Proposal (3):  dag_propose_task, dag_approve_proposal, dag_reject_proposal
+Adjust (3):    dag_rearrange, dag_force_modify, dag_partial_rollback
+Conflict (1):  dag_escalate_conflict
+Batch (2):     dag_decompose, dag_suggest_assignments
+Core (12):     dag_create, dag_add_task, dag_activate, dag_status,
+               dag_cancel, dag_submit_task, dag_approve_task,
+               dag_reject_task, dag_my_tasks, dag_reassign_task,
+               dag_list, dag_sleep_agent, dag_wake_agent
+```
+
+### 团队派发 (Phases 4-6)
+| 成员 | 任务 | 状态 |
+|------|------|:--:|
+| A3 (前端) | 7 前端组件 (GoalListPage, DagNodeGraph...) | 📤 |
+| A2 (可靠性) | 集成测试 + 回归 | 📤 |
+| A4 (平台) | MCP 全量审计 + routing fix | 📤 |
+
+### 关键设计决策
+- 用户 = ROOT_UID, PMO = 独立 Agent (未指定时 PM 兼任)
+- 1 Goal = N DAG (不连通复合图)
+- PM 对每个节点提选择题 → 用户决策模糊点
+- 用户启停 DAG (暂停不给新任务，执行中继续)
+- proposed 节点阻塞关联任务，PM+PMO 联合审核
+- PM+PMO 冲突 → ROOT 决策区仲裁
+- 部分回滚 (节点原子性，下游断开为独立 DAG)
+- 反馈堆积在 PM inbox，仅 idle 时 wake
 
 ---
 
