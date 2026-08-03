@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "node",
+      "args": [
+        "D:\\AI IDE\\CC_BOOS\\claudes\\.mcp\\filesystem\\dist\\index.js",
+        "D:\\AI IDE\\CC_BOOS"
+      ]
+    }
+  }
+}

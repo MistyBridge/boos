@@ -150,6 +150,7 @@ Workspace: `boos` | UID = Claude `--resume` UUID
 | 角色 | UID (cliSessionId) | 状态 |
 |------|-------------------|:--:|
 | 全栈架构师_PM-A1 (我) | `82b97d58-c66e-45d3-9f6d-af3476d5abdd` | 🟢 |
+| PMO-A5 | `f21556fd-a69b-47d0-b6c6-8da9e0a9921d` | 🟢 |
 | 前端工程师-A3 | `90490923-dc5b-4ac8-be3f-62c3efbe2bb0` | 🟢 |
 | 平台集成工程师-A4 | `d428dd45-f2ac-40e7-8825-4e82ba98686a` | 🟢 |
 | 可靠性工程师-A2 | `81c99498-c60d-4d92-8ae8-fe5ec41d5cab` | 🟢 |
@@ -429,4 +430,21 @@ PG:           identity_index + agent_sessions ← 全部路由字段
 约束:         1:1:1 全部 UNIQUE              ← 防身份混淆
 ```
 
-*最后更新: 2026-08-01 · Sprint 33 完成*
+*最后更新: 2026-08-03 · Sprint 38 PTY 修复 + PMO-A5 入职*
+
+---
+
+## Sprint 38: PTY 注入修复 (2026-08-03)
+
+| 变更 | 内容 | 状态 |
+|------|------|:--:|
+| PTY 注入 | 两阶段 → 单次 command+\r，bracketed-paste 主方案 | ✅ 已推送 |
+| 启动加速 | 3 agent 注册并行化 + auto-supervisor 延迟启动 | ✅ |
+| 去硬编码 | capability→role-name 从 hrAgent BUILTIN_ROLES 推导 | ✅ |
+| Auto-mode | managed agents 自动 --permission-mode bypassPermissions | ✅ |
+| PTY 验证 | 5 注入点可靠性验证 | 📤 A2 `task_mscm28hl_rrblsw` |
+
+### PMO-A5 入职 (2026-08-03)
+- UID: `f21556fd-a69b-47d0-b6c6-8da9e0a9921d`
+- 角色: pmo, workspace: boos
+- 职责: 升级事件响应 + PM 故障备援
