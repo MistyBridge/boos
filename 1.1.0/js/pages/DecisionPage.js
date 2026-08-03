@@ -6,7 +6,7 @@
 import { html } from '../html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { decisions, decisionSummary } from '../state.js';
-import { fetchDecisions, fetchDecisionSummary, approveDecision, rejectDecision, deferDecision, batchDecisions } from '../api.js';
+import { fetchDecisions, fetchDecisionSummary, approveDecision, rejectDecision, deferDecision, batchDecisions, fetchUnreadDecisionCount, markDecisionsRead } from '../api.js';
 import { setToast } from '../toast.js';
 import { boosConfirm } from '../dialog.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
@@ -38,9 +38,12 @@ export function DecisionPage() {
   useEffect(() => {
     fetchDecisions('open').catch(() => {});
     fetchDecisionSummary().catch(() => {});
+    fetchUnreadDecisionCount().catch(() => {});  // Sprint 37: init badge count
+    markDecisionsRead();                          // Sprint 37: clear badge on entering tab
     const t = setInterval(() => {
       fetchDecisions('open').catch(() => {});
       fetchDecisionSummary().catch(() => {});
+      fetchUnreadDecisionCount().catch(() => {});
     }, 10_000);
     return () => clearInterval(t);
   }, []);

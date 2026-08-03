@@ -513,6 +513,18 @@ export async function deferDecision(decisionId) {
   return r;
 }
 
+// Sprint 37: unread decision count for sidebar badge.
+export async function fetchUnreadDecisionCount() {
+  const r = await api('GET', '/api/decisions/unread-count');
+  S.decisionUnreadCount.value = r.count || 0;
+  return S.decisionUnreadCount.value;
+}
+
+// Sprint 37: clear unread decisions (called when entering decisions tab).
+export async function markDecisionsRead() {
+  S.decisionUnreadCount.value = 0;
+}
+
 // ── Goals (Sprint 24) ─────────────────────────────────────────
 
 export async function fetchGoals() {
@@ -532,6 +544,43 @@ export async function activateGoal(goalId) {
   const r = await api('POST', `/api/goals/${encodeURIComponent(goalId)}/activate`);
   await fetchGoals();
   return r;
+}
+
+// Sprint 37: goal lifecycle — start, pause, archive.
+export async function startGoal(goalId) {
+  const r = await api('POST', `/api/goals/${encodeURIComponent(goalId)}/start`);
+  await fetchGoals();
+  return r;
+}
+
+export async function pauseGoal(goalId) {
+  const r = await api('POST', `/api/goals/${encodeURIComponent(goalId)}/pause`);
+  await fetchGoals();
+  return r;
+}
+
+export async function archiveGoal(goalId) {
+  const r = await api('POST', `/api/goals/${encodeURIComponent(goalId)}/archive`);
+  await fetchGoals();
+  return r;
+}
+
+// Sprint 37: DAG decompose + suggestions.
+export async function decomposeDag(data) {
+  return api('POST', '/api/dags/decompose', data);
+}
+
+export async function suggestDagAssignments(data) {
+  return api('POST', '/api/dags/suggest-assignments', data);
+}
+
+// Sprint 37: DAG review questions.
+export async function addDagQuestions(dagId, data) {
+  return api('POST', `/api/dags/${encodeURIComponent(dagId)}/questions`, data);
+}
+
+export async function answerDagQuestion(questionId, data) {
+  return api('POST', `/api/dags/questions/${encodeURIComponent(questionId)}/answer`, data);
 }
 
 let consecutiveOffline = 0;
@@ -617,6 +666,29 @@ export function subscribeAgentEvents(onActivity) {
       } else {
         S.tasks.value = [event, ...list];
       }
+    } catch {}
+  });
+
+  // Sprint 37: unread decision count pushed via SSE.
+  es.addEventListener('unread_count', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      S.decisionUnreadCount.value = data.count || 0;
+    } catch {}
+  });
+
+  // Sprint 37: goal/DAG notification events.
+  es.addEventListener('goal_notification', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      // Dynamic import to avoid circular dependency at module load time.
+      import('../js/components/GoalNotification.js').then((mod) => {
+        mod.pushGoalNotification({
+          title: data.title || '目标更新',
+          message: data.message || '',
+          type: data.type || 'info',
+        });
+      }).catch(() => {});
     } catch {}
   });
 

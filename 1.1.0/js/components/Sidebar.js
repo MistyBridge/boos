@@ -6,7 +6,7 @@ import {
   sessions, deletedSessions, folders, sessionsByFolder, foldersCollapsed, activeSessionId,
   selectTab, selectSession, toggleSidebar, toggleFolder, setSidebarWidth,
   closeOpenSessionTab, clearActiveSession, openWorkspaceForFolder, workspaceFolderId,
-  installPrompt, isInstalledPwa, sessionFilter, pendingDecisionCount,
+  installPrompt, isInstalledPwa, sessionFilter, pendingDecisionCount, decisionUnreadCount,
   hrAgentSession,
 } from '../state.js';
 import { createFolder, renameFolder, deleteFolder, reorderFolders, setSessionFolder, reorderSessions, deleteSession, restoreSession, resumeSession, setSessionTitle, refreshAll, importSessionById, fetchDecisions } from '../api.js';
@@ -581,7 +581,7 @@ export function Sidebar() {
         <${NavItem} tab="workspace" icon=${html`<${IconWorkspace} />`} label="工作区"
                    onClick=${() => { workspaceFolderId.value = null; }} />
         <${NavItem} tab="decisions" icon=${html`<${IconDecisions} />`} label="决策区"
-                   badge=${pendingDecisionCount.value} />
+                   badge=${decisionUnreadCount.value} />
         <${NavItem} tab="goals"     icon=${html`<${IconSparkle} />`}   label="目标" />
         <${NavItem} tab="dashboard" icon=${html`<${IconDashboard} />`} label="仪表盘" />
         ${!isRemoteAccess() ? html`
