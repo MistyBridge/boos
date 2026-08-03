@@ -370,7 +370,7 @@ describe('check_inbox + respond_task flow', () => {
   before(() => { freshSetup(); });
   after(() => { teardown(); });
 
-  test('full send → check → respond cycle', async () => {
+  test('full send → check → respond → settle cycle', async () => {
     const { dispatch } = require('../lib/agentBus/handlers');
     const pm = await registerPm('flow-pm');
     const worker = await registerWorker('flow-w');
@@ -382,21 +382,40 @@ describe('check_inbox + respond_task flow', () => {
       to_uid: worker.uid, content: 'Do the thing',
     }, pmCtx);
     assert.ok(sent.ok);
+    assert.strictEqual(sent.sender, pm.uid);
     const taskId = sent.task.task_id;
 
     // 2. Worker checks inbox
     const inbox = await dispatch('check_inbox', {}, wCtx);
     assert.strictEqual(inbox.inbox_empty, false);
+    assert.strictEqual(inbox.receiver, worker.uid);
     assert.strictEqual(inbox.task.task_id, taskId);
 
-    // 3. Worker responds
+    // 3. Worker responds — Sprint 37: goes to submitted, not completed
     const responded = await dispatch('respond_task', {
       task_id: taskId, result: 'Done!',
     }, wCtx);
     assert.ok(responded.ok);
+    assert.strictEqual(responded.responder, worker.uid);
+    assert.strictEqual(responded.task_id, taskId);
+    assert.strictEqual(responded.status, 'submitted');
+    assert.strictEqual(responded.needs_settlement, true);
 
-    // 4. Task is completed — archived to JSONL, no longer in old shared store.
+    // 4. Worker's task is NOT archived yet
     const queue = require('../lib/agentBus/queue');
+    const beforeSettle = await queue.getArchivedTask(taskId);
+    assert.strictEqual(beforeSettle, null);
+
+    // 5. PM settles (approves) → completed + archived
+    const settled = await dispatch('settle_task', {
+      task_id: taskId, action: 'approve',
+    }, pmCtx);
+    assert.ok(settled.ok);
+    assert.strictEqual(settled.approver, pm.uid);
+    assert.strictEqual(settled.task_id, taskId);
+    assert.strictEqual(settled.status, 'completed');
+
+    // 6. Now in archive
     const archived = await queue.getArchivedTask(taskId);
     assert.ok(archived);
     assert.strictEqual(archived.status, 'completed');
@@ -748,7 +767,7 @@ describe('handlers edge cases', () => {
     assert.strictEqual(result.workspace, 'boos');
   });
 
-  test('respond_task with metadata', async () => {
+  test('respond_task with metadata + settlement', async () => {
     const { dispatch } = require('../lib/agentBus/handlers');
     const queue = require('../lib/agentBus/queue');
     const pm = await registerPm('rmd-pm');
@@ -761,15 +780,23 @@ describe('handlers edge cases', () => {
     // Claim
     await dispatch('check_inbox', {}, makeCtx(worker));
 
-    // Respond with metadata
+    // Respond with metadata — Sprint 37: goes to submitted
     const responded = await dispatch('respond_task', {
       task_id: sent.task.task_id,
       result: 'Done with meta',
       metadata: { duration_ms: 1500, files_changed: 3 },
     }, makeCtx(worker));
     assert.ok(responded.ok);
+    assert.strictEqual(responded.status, 'submitted');
+    assert.strictEqual(responded.responder, worker.uid);
+    assert.strictEqual(responded.task_id, sent.task.task_id);
 
-    // Task is archived after respond — check via getArchivedTask.
+    // PM settles → archived
+    await dispatch('settle_task', {
+      task_id: sent.task.task_id, action: 'approve',
+    }, makeCtx(pm));
+
+    // Now in archive.
     const task = await queue.getArchivedTask(sent.task.task_id);
     assert.ok(task);
     assert.strictEqual(task.status, 'completed');
