@@ -435,11 +435,8 @@ function listenWithFallback(preferred) {
   }
 
   // Auto-Supervisor: code-layer background loop for stalled-project detection.
-  // Runs UNCONDITIONALLY — independent of BOOS_NO_AGENT_BUS_WATCH gate.
-  // Has its own internal guards (started flag, workspace check, folder toggles).
-  try {
-    require('./lib/agentBus/autoSupervisor').start();
-  } catch (e) { console.warn('[boos] auto-supervisor start failed:', e.message); }
+  // Started by notifications.js after agent-bus init completes.
+  // NOT started here — the log below is the last thing before listen.
 
   try { require('./lib/archive').startPeriodicPrune(); }
   catch (e) { console.warn('[boos] archive system failed to start:', e.message); }
