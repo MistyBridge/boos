@@ -1,0 +1,60 @@
+{
+  "task_id": "pmo-a5-onboarding",
+  "type": "recruitment",
+  "pm_uid": "manual",
+  "pm_name": "USER",
+  "received_at": "2026-08-03T02:20:00Z",
+  "started_at": "2026-08-03T02:20:10Z",
+  "completed_at": "2026-08-03T02:20:40Z",
+  "phases": [
+    {
+      "name": "role_analysis",
+      "duration_ms": 2000,
+      "status": "done",
+      "result": "PMO-A5 — 升级事件响应 + PM 故障备援，role=pmo，项目 boos-core"
+    },
+    {
+      "name": "skill_matching",
+      "duration_ms": 1000,
+      "status": "done",
+      "result": "无需 skills — PMO 是事件驱动通信角色，非编码岗位。与现有 PMO 模板一致"
+    },
+    {
+      "name": "file_generation",
+      "duration_ms": 15000,
+      "status": "done",
+      "result": "已创建 settings.local.json (MCP 启用 + 权限)；CLAUDE.md 与 settings.json 已存在"
+    },
+    {
+      "name": "agent_registration",
+      "duration_ms": 5000,
+      "status": "pending",
+      "result": "PMO 为手动启动角色，启动时自行 register_agent(role=pmo)"
+    },
+    {
+      "name": "session_launch",
+      "duration_ms": 0,
+      "status": "pending",
+      "result": "用户手动启动 PMO-A5 会话"
+    },
+    {
+      "name": "validation",
+      "duration_ms": 2000,
+      "status": "done",
+      "result": ".mcp.json 根级配置包含全部启用 MCP；agent-bus 连接正常"
+    }
+  ],
+  "review_rounds": 0,
+  "total_duration_ms": 25000,
+  "errors": [],
+  "onboarding_report": {
+    "agent_uid": "PMO-A5 (手动注册)",
+    "agent_name": "PMO-A5",
+    "session_id": "手动启动",
+    "cwd": "D:\\AI IDE\\CC_BOOS\\claudes\\PMO-A5",
+    "skills_assigned": ["senior-pm", "pm-skills", "scrum-master", "team-communications", "meeting-analyzer", "planning-with-files-zh"],
+    "mcps_assigned": ["agent-bus", "filesystem", "openviking", "codegraph"],
+    "capabilities": ["pmo", "escalation"],
+    "project": "boos-core"
+  }
+}
