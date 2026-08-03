@@ -96,6 +96,58 @@ function register(app, { asyncH }) {
     }
   }));
 
+  // Sprint 37: POST /api/dags/decompose — batch DAG creation
+  app.post('/api/dags/decompose', asyncH(async (req, res) => {
+    const ctx = _ctxFromReq(req);
+    const body = req.body || {};
+    try {
+      const result = await dagHandlers._dagDecompose(body, ctx);
+      if (result.error) return res.status(400).json(result);
+      res.status(201).json(result);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  }));
+
+  // Sprint 37: POST /api/dags/suggest-assignments — capability-based agent suggestions
+  app.post('/api/dags/suggest-assignments', asyncH(async (req, res) => {
+    const ctx = _ctxFromReq(req);
+    const body = req.body || {};
+    try {
+      const result = await dagHandlers._dagSuggestAssignments(body, ctx);
+      if (result.error) return res.status(400).json(result);
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  }));
+
+  // Sprint 37: POST /api/dags/:dagId/questions — add review questions to DAG tasks
+  app.post('/api/dags/:dagId/questions', asyncH(async (req, res) => {
+    const ctx = _ctxFromReq(req);
+    const body = req.body || {};
+    try {
+      const result = await dagHandlers._dagAddQuestions({ dag_id: req.params.dagId, ...body }, ctx);
+      if (result.error) return res.status(400).json(result);
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  }));
+
+  // Sprint 37: POST /api/dags/questions/:questionId/answer — answer a review question
+  app.post('/api/dags/questions/:questionId/answer', asyncH(async (req, res) => {
+    const ctx = _ctxFromReq(req);
+    const body = req.body || {};
+    try {
+      const result = await dagHandlers._dagAnswerQuestion({ question_id: req.params.questionId, ...body }, ctx);
+      if (result.error) return res.status(400).json(result);
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  }));
+
 }
 
 module.exports = { register };

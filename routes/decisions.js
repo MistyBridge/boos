@@ -52,6 +52,54 @@ function register(app, { asyncH }) {
   );
 
 
+  // Sprint 37: GET /api/decisions/unread-count — unread decision badge (MUST be before :id)
+  app.get('/api/decisions/unread-count', asyncH(async (req, res) => {
+    const ws = req.query.workspace || null;
+
+    // 1. Count open/deferred decisions in OPEN/.
+    const openList = decisionSystem.listDecisions({ workspace: ws, status: 'open', limit: 999 });
+    const decisionCount = (openList.decisions || []).filter(d =>
+      d.status === 'open' || d.status === 'deferred'
+    ).length;
+
+    // 2. Count ROOT inbox unread tasks (pending + in_progress).
+    let rootInboxCount = 0;
+    try {
+      const store = require('../lib/agentBus/store');
+      const ROOT_UID = store.ROOT_UID;
+      if (ROOT_UID) {
+        const inboxStore = require('../lib/agentBus/inboxStore');
+        const rootTasks = await inboxStore.loadInbox(ROOT_UID);
+        rootInboxCount = rootTasks.filter(t =>
+          t.status === 'pending' || t.status === 'in_progress'
+        ).length;
+      }
+    } catch { /* inbox unavailable */ }
+
+    // 3. Count ROOT tasks in agent-bus DB (fallback).
+    let rootDbCount = 0;
+    try {
+      const store = require('../lib/agentBus/store');
+      const ROOT_UID = store.ROOT_UID;
+      const fs = require('fs');
+      const db = JSON.parse(fs.readFileSync(store.DB_PATH, 'utf-8'));
+      rootDbCount = Object.values(db.tasks || {}).filter(t =>
+        t.receiver_uid === ROOT_UID && t.status !== 'completed' && t.status !== 'cancelled'
+      ).length;
+    } catch {}
+
+    const totalUnread = decisionCount + Math.max(rootInboxCount, rootDbCount);
+
+    res.json({
+      ok: true,
+      count: totalUnread,
+      breakdown: {
+        decisions: decisionCount,
+        root_inbox: Math.max(rootInboxCount, rootDbCount),
+      },
+    });
+  }));
+
   // GET /api/decisions/summary — per-workspace decision stats (MUST be before :id)
   app.get('/api/decisions/summary', asyncH(async (req, res) => {
     const ws = req.query.workspace || null;
@@ -80,6 +128,7 @@ function register(app, { asyncH }) {
 
       // Auto-return the answer to the asking agent.
       await _notifyAgentOfDecision(r, 'approved', approver, comment);
+      _emitUnreadChange();
 
       res.json(r);
     }),
@@ -96,6 +145,7 @@ function register(app, { asyncH }) {
 
       // Auto-return the answer to the asking agent.
       await _notifyAgentOfDecision(r, 'rejected', approver, comment);
+      _emitUnreadChange();
 
       res.json(r);
     }),
@@ -115,6 +165,7 @@ function register(app, { asyncH }) {
 
       // Auto-return the answer to the asking agent.
       await _notifyAgentOfDecision(r, 'replied', approver, body.trim());
+      _emitUnreadChange();
 
       res.json(r);
     }),
@@ -168,6 +219,14 @@ function register(app, { asyncH }) {
     res.json(r);
   }));
 
+}
+
+// ── SSE notify on decision change ─────────────────────────────────────
+// Sprint 37: Push unread_count change event via decisionsEvents emitter.
+function _emitUnreadChange() {
+  try {
+    decisionSystem._emitChange('unread_updated', {});
+  } catch {}
 }
 
 // ── Auto-respond to agent via agent-bus ────────────────────────────────

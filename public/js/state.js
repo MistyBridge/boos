@@ -59,6 +59,7 @@ export const installPrompt    = signal(null);            // captured beforeinsta
 export const isInstalledPwa   = signal(false);           // running inside an installed PWA window
 export const sessionFilter    = signal('');              // search/filter string for sidebar session tree
 export const decisions        = signal([]);              // decision records from /api/decisions
+export const decisionUnreadCount = signal(0);               // Sprint 37: unread decision badge
 // Sprint 24: goals from /api/goals
 export const goals            = signal([]);              // goal records from /api/goals
 export const decisionSummary  = signal({ open: 0, urgent: 0, deferred: 0 });
