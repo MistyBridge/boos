@@ -19,7 +19,8 @@
         "C:/Users/admin/.boos/mcp-proxy.js"
       ],
       "env": {
-        "BOOS_SESSION_ID": "sess-mscm5qo7-y0pmrq"
+        "BOOS_SESSION_ID": "sess-mscm5qo7-y0pmrq",
+        "BOOS_CLI_SESSION_ID": "f21556fd-a69b-47d0-b6c6-8da9e0a9921d"
       }
     }
   }

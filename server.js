@@ -59,6 +59,19 @@ const gracefulShutdown = (reason) => _gracefulShutdown(reason, {
 });
 
 const app = express();
+
+// ── shutdown token ──────────────────────────────────────────────────────
+// Generated once per server lifetime. Required by /api/shutdown and
+// /api/upgrade to prevent rogue agents from killing the BOOS backend.
+// Frontend reads it from /api/health; launcher (bin/boos.js) reads it
+// from ~/.boos/.shutdown-token.
+const SHUTDOWN_TOKEN = require('node:crypto').randomBytes(16).toString('hex');
+try {
+  require('node:fs').writeFileSync(
+    require('node:path').join(DATA_DIR, '.shutdown-token'), SHUTDOWN_TOKEN, 'utf-8'
+  );
+} catch {}
+
 app.use(express.json({ limit: '1mb' }));
 
 // Open CORS preflight for runtime discovery — dev tools from any origin
@@ -149,6 +162,24 @@ const _sh = createSessionHelpers({
   scheduleBindingScan: bindingScanner.scheduleBindingScan,
   scheduleBindingScanSeries: bindingScanner.scheduleBindingScanSeries,
   managedAgents: (() => {
+    // Sprint 38: Auto-discover managed agents from persisted sessions.
+    // Any session with a known cliSessionId (Claude --resume UUID) is a
+    // managed agent — no manual config needed.  Falls back to config.json
+    // for backward compatibility only if sessions.json is empty.
+    try {
+      const fs = require('node:fs');
+      const sp = require('node:path').join(DATA_DIR, 'sessions.json');
+      const sessions = JSON.parse(fs.readFileSync(sp, 'utf-8'));
+      const list = Array.isArray(sessions) ? sessions : Object.values(sessions);
+      const discovered = list
+        .filter(s => s.cliSessionId && !s.deletedAt)
+        .map(s => s.cwd.replace(/\\/g, '/'));
+      if (discovered.length > 0) {
+        console.log('[boos] managedAgents auto-discovered:', discovered.length, 'paths');
+        return discovered;
+      }
+    } catch {}
+    // Fallback: manual config (legacy).
     try {
       return JSON.parse(require('node:fs').readFileSync(
         require('node:path').join(DATA_DIR, 'config.json'), 'utf-8'
@@ -252,6 +283,7 @@ require('./routes/health').register(app, {
   pkg,
   gracefulShutdown,
   openInBrowser,
+  shutdownToken: SHUTDOWN_TOKEN,
   getState() {
     return lifecycleState;
   },
@@ -279,6 +311,7 @@ require('./routes/version').register(app, {
   asyncH,
   pkg,
   gracefulShutdown,
+  shutdownToken: SHUTDOWN_TOKEN,
   getState() {
     return lifecycleState;
   },
@@ -537,7 +570,9 @@ function listenWithFallback(preferred) {
   const apiUrl = `http://localhost:${port}`;
   const FRONTEND_URL = IS_DEV ? apiUrl : 'https://MistyBridge.github.io/boos/';
   lifecycleState.frontendUrl = FRONTEND_URL;
-  // Crash resilience — log, don't die.
+  // Crash resilience — log and attempt graceful shutdown so the next boot
+  // can auto-resume managed sessions.  Without cleanup the port.lock stays
+  // and active-sessions.json is never written, breaking crash-reconnect.
   process.on('unhandledRejection', (reason) => {
     console.error('[boos] UNHANDLED REJECTION:', reason?.message || reason);
     if (reason?.stack) console.error(reason.stack);
@@ -545,6 +580,12 @@ function listenWithFallback(preferred) {
   process.on('uncaughtException', (err) => {
     console.error('[boos] UNCAUGHT EXCEPTION:', err.message);
     if (err.stack) console.error(err.stack);
+    // Attempt graceful shutdown — at minimum this writes active-sessions.json
+    // and removes port.lock so the next boot can cleanly take over the port
+    // and auto-resume managed agent sessions.
+    try { gracefulShutdown('uncaught exception: ' + (err.message || 'unknown')); } catch {}
+    // If gracefulShutdown didn't exit (e.g. it hung), force exit after 5s.
+    setTimeout(() => process.exit(1), 5000).unref();
   });
 
   console.log(
@@ -567,23 +608,58 @@ function listenWithFallback(preferred) {
 
   if (process.env.BOOS_KEEP_ALIVE !== '1') {
     // Heartbeat watchdog: 2 paths — (1) lost heartbeat after seen → 90s, (2) never seen → 120s.
-    // Headless mode (BOOS_NO_BROWSER=1): MCP connections keep alive, Path 2 skipped.
+    // Sprint 38 crash fix: both paths now also check for MCP connections and managed agent
+    // sessions (even if PTY is dead — auto-resume will handle them).  Prevents the server
+    // from self-terminating while agents are still working or waiting for frontend reconnect.
     setInterval(() => {
       const uptime = process.uptime() * 1000;
       const hasLiveSession = webTerminal.list().some((t) => !t.exitedAt);
+      // Check for managed agent sessions with cliSessionId (Claude UUIDs).
+      // These sessions may have dead PTYs but the agent is still a managed
+      // worker — auto-resume will bring them back on frontend reconnect.
+      let hasManagedAgents = false;
+      try {
+        const allSessions = persistedSessions._store?.data || {};
+        hasManagedAgents = Object.values(allSessions).some(
+          (s) => s.cliSessionId && !s.deletedAt && !s.manualStopped
+        );
+      } catch {}
+      // MCP connections keep the server alive in all modes.
+      let mcpCount = 0;
+      try { mcpCount = idleWatcher.status().mcpConnections || 0; } catch {}
+      const hasMcp = mcpCount > 0;
+      // Managed agent sessions with pending inbox tasks mean work is in flight.
+      let agentsWithWork = 0;
+      try {
+        const inboxDir = require('node:path').join(DATA_DIR, 'agent-bus', 'inbox');
+        const fs = require('node:fs');
+        if (fs.existsSync(inboxDir)) {
+          const files = fs.readdirSync(inboxDir).filter((f) => f.endsWith('.json') && !f.endsWith('.bak'));
+          for (const f of files) {
+            try {
+              const data = JSON.parse(fs.readFileSync(require('node:path').join(inboxDir, f), 'utf-8'));
+              if ((data.pending || []).length + (data.in_progress || []).length > 0) agentsWithWork++;
+            } catch {}
+          }
+        }
+      } catch {}
+
       if (lifecycleState.heartbeatSeen) {
         if (Date.now() - lifecycleState.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
-          const hasMcp = process.env.BOOS_NO_BROWSER === '1' && idleWatcher.status().mcpConnections > 0;
-          if (!hasLiveSession && !hasMcp) gracefulShutdown(`no heartbeat for ${HEARTBEAT_TIMEOUT_MS / 1000}s`);
+          if (!hasLiveSession && !hasMcp && !hasManagedAgents && agentsWithWork === 0) {
+            gracefulShutdown(`no heartbeat for ${HEARTBEAT_TIMEOUT_MS / 1000}s`);
+          }
         }
         return;
       }
-      const isHeadless = process.env.BOOS_NO_BROWSER === '1';
-      if (!hasLiveSession && uptime > 120_000 && !isHeadless) {
+      // Never-seen heartbeat: wait for frontend OR MCP OR managed agents.
+      // The server stays alive as long as there are managed agents with work,
+      // MCP connections, or live sessions — even if no browser has connected yet.
+      if (!hasLiveSession && uptime > 120_000 && !hasMcp && !hasManagedAgents) {
         gracefulShutdown('no frontend connected within 120s of boot');
       }
     }, 30_000);
-    console.log('[boos] heartbeat watchdog active (respects live sessions)');
+    console.log('[boos] heartbeat watchdog active (respects live sessions + MCP + managed agents)');
   }
 })().catch((err) => {
   console.error('startup failed:', err);

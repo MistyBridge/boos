@@ -115,47 +115,41 @@ describe('_injectCommand (Sprint 38 vFinal)', () => {
     // Not strictly necessary (test process exits), but clean.
   });
 
-  test('burst mode — first write is immediate command, \\r deferred by 50ms', async () => {
+  test('burst mode — single write with \\n\\r (LF+CR) appended', () => {
     _injectCommand('sess-burst', 'check_inbox[BOOS]');
-    // First write is synchronous (command text).
-    assert.equal(writes.length, 1, 'first write should be immediate');
-    assert.equal(writes[0].data, 'check_inbox[BOOS]',
-      'first write is bare command');
+    assert.equal(writes.length, 1, 'burst mode should produce exactly 1 write');
+    assert.equal(writes[0].data, 'check_inbox[BOOS]\n\r',
+      'command + \\n\\r in single write');
+    assert.ok(writes[0].data.endsWith('\n\r'),
+      'should end with LF+CR');
     assert.equal(writes[0].sessionId, 'sess-burst');
-    // Wait for deferred \r write (50ms setTimeout).
-    await new Promise((r) => setTimeout(r, 80));
-    assert.equal(writes.length, 2, 'second write should arrive after 50ms');
-    assert.equal(writes[1].data, '\r',
-      'second write is \\r alone (Enter key event)');
-    assert.equal(writes[1].sessionId, 'sess-burst');
-    assert.equal(writes[1].data.length, 1);
-    assert.equal(writes[1].data.charCodeAt(0), 0x0D);
   });
 
-  test('burst mode — second write is pure \\r, NOT \\r\\n', async () => {
+  test('burst mode — \\n\\r terminator, not just \\r', () => {
     _injectCommand('sess-burst2', 'check_inbox[BOOS]');
-    assert.equal(writes.length, 1, 'first write immediate');
-    assert.ok(!writes[0].data.endsWith('\r'), 'first write should NOT end with \\r');
-    assert.ok(!writes[0].data.endsWith('\r\n'), 'first write should NOT end with \\r\\n');
-    await new Promise((r) => setTimeout(r, 80));
-    assert.equal(writes[1].data, '\r', 'second write is exactly \\r');
-    assert.notEqual(writes[1].data, '\r\n', 'second write is NOT \\r\\n');
+    assert.equal(writes.length, 1);
+    // Verify the terminator is exactly \n\r (0x0A 0x0D)
+    const data = writes[0].data;
+    assert.ok(data.endsWith('\n\r'), 'must end with LF+CR');
+    const beforeTerm = data.slice(0, -2);
+    assert.equal(beforeTerm, 'check_inbox[BOOS]');
+    // Verify individual bytes
+    const last2 = data.slice(-2);
+    assert.equal(last2.charCodeAt(0), 0x0A, 'LF = 0x0A');
+    assert.equal(last2.charCodeAt(1), 0x0D, 'CR = 0x0D');
   });
 
-  test('full pipeline: _buildWakeCommand → _injectCommand (burst)', async () => {
+  test('full pipeline: _buildWakeCommand → _injectCommand (burst)', () => {
     const cmd = wakeMod._buildWakeCommand(['task_001'], {
       header: 'worker submitted task_001',
     });
     assert.equal(cmd, 'check_inbox[BOOS]');
     _injectCommand('sess-pipeline', cmd);
     assert.equal(writes.length, 1);
-    assert.equal(writes[0].data, 'check_inbox[BOOS]');
-    await new Promise((r) => setTimeout(r, 80));
-    assert.equal(writes.length, 2);
-    assert.equal(writes[1].data, '\r');
+    assert.equal(writes[0].data, 'check_inbox[BOOS]\n\r');
   });
 
-  test('paste mode — single write with bracketed-paste escape sequences', () => {
+  test('paste mode — single write with bracketed-paste + \\n\\r', () => {
     const prev = process.env.BOOS_PTY_INJECT_MODE;
     process.env.BOOS_PTY_INJECT_MODE = 'paste';
     try {
@@ -165,10 +159,8 @@ describe('_injectCommand (Sprint 38 vFinal)', () => {
         'should start with bracketed-paste start');
       assert.ok(writes[0].data.endsWith('\x1b[201~'),
         'should end with bracketed-paste end');
-      assert.ok(writes[0].data.includes('check_inbox[BOOS]'),
-        'should contain command');
-      assert.ok(writes[0].data.includes('\r'),
-        'should contain \\r before paste end');
+      assert.ok(writes[0].data.includes('check_inbox[BOOS]\n\r'),
+        'should contain command + \\n\\r');
     } finally {
       process.env.BOOS_PTY_INJECT_MODE = prev;
     }
@@ -178,37 +170,31 @@ describe('_injectCommand (Sprint 38 vFinal)', () => {
     const prev = process.env.BOOS_PTY_INJECT_MODE;
     process.env.BOOS_PTY_INJECT_MODE = 'typed';
     try {
-      // _typedInject writes first char synchronously, rest deferred.
-      _injectCommand('sess-typed', 'AB');
+      // _typedInject with \n\r appends → 'c' is first char.
+      _injectCommand('sess-typed', 'check_inbox[BOOS]');
       assert.ok(writes.length >= 1, 'typed mode should write at least first char');
-      // The first char should be 'A'
-      assert.equal(writes[0].data, 'A');
-      // Wait for deferred typed writes to complete (A [0ms], B [8ms], \r [8ms])
-      // so they don't pollute later tests sharing the writes array.
-      await new Promise((r) => setTimeout(r, 50));
+      assert.equal(writes[0].data, 'c');
+      // Wait for deferred typed writes to complete so they don't pollute later tests.
+      await new Promise((r) => setTimeout(r, 200));
     } finally {
       process.env.BOOS_PTY_INJECT_MODE = prev;
     }
   });
 
-  test('default mode is burst when BOOS_PTY_INJECT_MODE is unset', async () => {
+  test('default mode is burst when BOOS_PTY_INJECT_MODE is unset', () => {
     delete process.env.BOOS_PTY_INJECT_MODE;
     _injectCommand('sess-default', 'check_inbox[BOOS]');
-    assert.equal(writes.length, 1, 'default should be burst — first write immediate');
-    assert.equal(writes[0].data, 'check_inbox[BOOS]');
-    await new Promise((r) => setTimeout(r, 80));
-    assert.equal(writes[1].data, '\r');
+    assert.equal(writes.length, 1, 'default should be burst (1 write)');
+    assert.equal(writes[0].data, 'check_inbox[BOOS]\n\r');
   });
 
-  test('unknown mode falls back to burst', async () => {
+  test('unknown mode falls back to burst', () => {
     const prev = process.env.BOOS_PTY_INJECT_MODE;
     process.env.BOOS_PTY_INJECT_MODE = 'unknown_mode_xyz';
     try {
       _injectCommand('sess-unknown', 'check_inbox[BOOS]');
       assert.equal(writes.length, 1, 'unknown mode should fall back to burst');
-      assert.equal(writes[0].data, 'check_inbox[BOOS]');
-      await new Promise((r) => setTimeout(r, 80));
-      assert.equal(writes[1].data, '\r');
+      assert.equal(writes[0].data, 'check_inbox[BOOS]\n\r');
     } finally {
       process.env.BOOS_PTY_INJECT_MODE = prev;
     }

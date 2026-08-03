@@ -565,6 +565,13 @@ export async function archiveGoal(goalId) {
   return r;
 }
 
+/** Update goal fields (title, description, priority). → PUT /api/goals/:id */
+export async function updateGoal(goalId, data) {
+  const r = await api('PUT', `/api/goals/${encodeURIComponent(goalId)}`, data);
+  await fetchGoals();
+  return r;
+}
+
 // Sprint 37: DAG decompose + suggestions.
 export async function decomposeDag(data) {
   return api('POST', '/api/dags/decompose', data);
@@ -816,4 +823,21 @@ export async function approveDagTask(taskId, comment) {
 /** Reject a submitted task with mandatory feedback. → POST /api/dags/tasks/:id/reject */
 export async function rejectDagTask(taskId, comment) {
   return api('POST', `/api/dags/tasks/${encodeURIComponent(taskId)}/reject`, { comment });
+}
+
+// ── Sprint 37: Agent-Bus settlement API ────────────────────────────────────
+
+/** Fetch settlement-pending notifications for PM inbox. → GET /api/agent-bus/tasks?status=settlement */
+export async function fetchSettlementNotifications(workspace = 'boos') {
+  return api('GET', `/api/agent-bus/tasks?status=settlement&workspace=${encodeURIComponent(workspace)}`);
+}
+
+/**
+ * Settle (approve/reject) a task via agent-bus.
+ * @param {string} taskId — agent-bus task_id
+ * @param {'approve'|'reject'} action
+ * @param {string} feedback — required for reject, optional for approve
+ */
+export async function settleTask(taskId, action, feedback) {
+  return api('POST', `/api/agent-bus/tasks/${encodeURIComponent(taskId)}/settle`, { action, feedback: feedback || '' });
 }

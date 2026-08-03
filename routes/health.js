@@ -3,7 +3,7 @@
 //
 // register(app, deps)
 //   deps: { asyncH, webTerminal, pkg, gracefulShutdown, openInBrowser,
-//           getState, setState }
+//           shutdownToken, getState, setState }
 //
 // Mutable state (currentPort, frontendUrl, lastHeartbeat, heartbeatSeen,
 // restartInFlight) is owned by server.js and accessed through getState() /
@@ -14,7 +14,7 @@
 const path = require('node:path');
 const os = require('node:os');
 
-function register(app, { asyncH, webTerminal, pkg, gracefulShutdown, openInBrowser, getState, setState, idleWatcher }) {
+function register(app, { asyncH, webTerminal, pkg, gracefulShutdown, openInBrowser, shutdownToken, getState, setState, idleWatcher }) {
 
   // ---- capabilities ----
   app.get('/api/capabilities', (_req, res) => res.json({
@@ -25,6 +25,7 @@ function register(app, { asyncH, webTerminal, pkg, gracefulShutdown, openInBrows
   // ---- health ----
   app.get('/api/health', (_req, res) => res.json({
     ok: true, pid: process.pid, version: pkg.version, name: pkg.name,
+    shutdownToken,
   }));
 
   // ---- runtime discovery ----
@@ -60,11 +61,14 @@ function register(app, { asyncH, webTerminal, pkg, gracefulShutdown, openInBrows
   }));
 
   // ---- shutdown ----
-  // Accepts: BOOS_NO_BROWSER=1 (headless) and BOOS_KEEP_ALIVE=1 (automation)
-  // mode servers. In headless mode the heartbeat watchdog skips Path-1/P-2
-  // shutdown when MCP SSE clients are connected, so /api/shutdown is the
-  // primary clean-exit path for those deployments.
-  app.post('/api/shutdown', (_req, res) => {
+  // Requires shutdown token to prevent rogue agents from killing BOOS.
+  // Frontend gets the token from /api/health; launcher reads it from
+  // ~/.boos/.shutdown-token.
+  app.post('/api/shutdown', (req, res) => {
+    const token = req.body?.token || req.headers['x-boos-shutdown-token'] || '';
+    if (token !== shutdownToken) {
+      return res.status(403).json({ error: 'forbidden: invalid or missing shutdown token' });
+    }
     res.json({ ok: true, bye: 'shutting down' });
     setImmediate(() => gracefulShutdown('/api/shutdown'));
   });

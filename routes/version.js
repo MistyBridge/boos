@@ -2,7 +2,7 @@
 // Replaces inline handlers in server.js — /api/version, /api/upgrade.
 //
 // register(app, deps)
-//   deps: { asyncH, pkg, gracefulShutdown, getState }
+//   deps: { asyncH, pkg, gracefulShutdown, shutdownToken, getState }
 
 'use strict';
 
@@ -40,7 +40,7 @@ function cmpSemver(a, b) {
   return 0;
 }
 
-function register(app, { asyncH, pkg, gracefulShutdown, getState }) {
+function register(app, { asyncH, pkg, gracefulShutdown, shutdownToken, getState }) {
 
   app.get('/api/version', asyncH(async (req, res) => {
     const force = String(req.query.refresh || '') === '1';
@@ -82,6 +82,11 @@ function register(app, { asyncH, pkg, gracefulShutdown, getState }) {
   app.post('/api/upgrade', asyncH(async (req, res) => {
     if (upgradeInFlight) {
       return res.status(409).json({ error: 'upgrade already in progress' });
+    }
+    // Require shutdown token — same guard as /api/shutdown.
+    const token = (req.body || {}).token || req.headers['x-boos-shutdown-token'] || '';
+    if (token !== shutdownToken) {
+      return res.status(403).json({ error: 'forbidden: invalid or missing shutdown token' });
     }
     const body = req.body || {};
     const target = String(body.target || 'latest');

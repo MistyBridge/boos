@@ -27,7 +27,10 @@
     },
     "agent-bus": {
       "type": "sse",
-      "url": "http://127.0.0.1:7780/mcp/sse?boos_session_id=sess-ms31vkya-k7jusv"
+      "url": "http://127.0.0.1:7780/mcp/sse?boos_session_id=sess-ms31vkya-k7jusv",
+      "env": {
+        "BOOS_CLI_SESSION_ID": "bd66f2ff-7e40-487c-8022-2b2e71814904"
+      }
     },
     "openviking": {
       "type": "http",

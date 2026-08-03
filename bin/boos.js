@@ -69,12 +69,21 @@ async function killOldInstance(port) {
 
   // Try graceful shutdown.
   try {
+    // Read shutdown token (Sprint 38 — prevents rogue agents from killing BOOS).
+    let token = '';
+    try {
+      token = fs.readFileSync(path.join(HOME, '.shutdown-token'), 'utf-8').trim();
+    } catch { /* token file may not exist on older instances */ }
+
     await new Promise((resolve) => {
+      const postData = JSON.stringify({ token });
       const req = http.request({
         hostname: '127.0.0.1', port, path: '/api/shutdown', method: 'POST', timeout: 3000,
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
       }, (res) => { res.resume(); res.on('end', resolve); });
       req.on('error', resolve);
       req.on('timeout', () => { req.destroy(); resolve(); });
+      req.write(postData);
       req.end();
     });
     // Wait for process to exit.

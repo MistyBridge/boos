@@ -34,7 +34,8 @@
         "C:/Users/admin/.boos/mcp-proxy.js"
       ],
       "env": {
-        "BOOS_SESSION_ID": "sess-ms31vjhf-l9i6xk"
+        "BOOS_SESSION_ID": "sess-ms31vjhf-l9i6xk",
+        "BOOS_CLI_SESSION_ID": "82b97d58-c66e-45d3-9f6d-af3476d5abdd"
       }
     },
     "openviking": {
