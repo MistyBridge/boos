@@ -302,18 +302,20 @@ function listenWithFallback(preferred) {
       server.once('listening', () => resolve({ server, port: preferred }));
       server.once('error', (err) => {
         if (err.code !== 'EADDRINUSE') return reject(err);
-        if (retries >= 3) return reject(new Error(`端口 ${preferred} 被占用，3 次尝试后仍无法释放`));
-        // reclaimPortFromOldInstance 已在启动前释放，这里是竞态兜底：
-        // 直接杀占用的进程，重试同一端口。
+        if (retries >= 5) {
+          console.error(`[boos] 启动失败: 端口 ${preferred} 被占用，5 次强行释放后仍未成功`);
+          console.error(`  请手动检查占用进程: netstat -ano | findstr :${preferred}`);
+          return reject(new Error(`端口 ${preferred} 被占用，无法启动`));
+        }
         server.close();
+        // Force-kill whatever is on the port, then retry.
         (async () => {
           try {
-            const { execSync } = require('node:child_process');
             const cmd = process.platform === 'win32'
               ? `netstat -ano | findstr :${preferred} | findstr LISTENING`
               : `lsof -i :${preferred} -t`;
-            const output = execSync(cmd, { encoding: 'utf-8', timeout: 2000 }).trim();
-            const m = output.match(/\d+$/);
+            const output = require('node:child_process').execSync(cmd, { encoding: 'utf-8', timeout: 2000 }).trim();
+            const m = output.match(/\d+$/m);
             if (m) {
               const pid = parseInt(m[0], 10);
               if (pid && pid !== process.pid) {
@@ -546,7 +548,7 @@ function listenWithFallback(preferred) {
   });
 
   console.log(
-    `boos listening on ${apiUrl}${port !== preferredPort ? `  (requested ${preferredPort}, was taken)` : ''}`,
+    `boos listening on ${apiUrl}`,
   );
   console.log(`frontend at      ${FRONTEND_URL}`);
   console.log(`data dir:        ${DATA_DIR}`);

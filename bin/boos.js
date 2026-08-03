@@ -24,7 +24,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const http = require('node:http');
-const { spawn } = require('node:child_process');
+const { spawn, execSync } = require('node:child_process');
 
 const SERVER = path.join(__dirname, '..', 'server.js');
 const HOME = process.env.BOOS_HOME || path.join(os.homedir(), '.boos');
@@ -46,6 +46,54 @@ function pidAlive(pid) {
   if (!pid) return false;
   try { process.kill(pid, 0); return true; }
   catch (e) { return e.code === 'EPERM'; }
+}
+
+// Force-kill any process occupying the target port. Tries graceful
+// shutdown first (POST /api/shutdown, 3s timeout), then SIGKILL.
+// Returns true if port is now free.
+async function killOldInstance(port) {
+  // Find PID on the port.
+  let pid = null;
+  try {
+    const cmd = process.platform === 'win32'
+      ? `netstat -ano | findstr :${port} | findstr LISTENING`
+      : `lsof -i :${port} -t`;
+    const output = execSync(cmd, { encoding: 'utf-8', timeout: 2000 }).trim();
+    const m = output.match(/\d+$/m);
+    if (m) pid = parseInt(m[0], 10);
+  } catch { /* no process on port */ }
+
+  if (!pid || pid === process.pid) return true;
+
+  console.log(`boos: 端口 ${port} 被 PID ${pid} 占用 — 正在释放...`);
+
+  // Try graceful shutdown.
+  try {
+    await new Promise((resolve) => {
+      const req = http.request({
+        hostname: '127.0.0.1', port, path: '/api/shutdown', method: 'POST', timeout: 3000,
+      }, (res) => { res.resume(); res.on('end', resolve); });
+      req.on('error', resolve);
+      req.on('timeout', () => { req.destroy(); resolve(); });
+      req.end();
+    });
+    // Wait for process to exit.
+    for (let i = 0; i < 15; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      if (!pidAlive(pid)) { console.log(`boos: PID ${pid} 已优雅退出`); return true; }
+    }
+  } catch {}
+
+  // Force kill.
+  if (pidAlive(pid)) {
+    console.log(`boos: PID ${pid} 未响应 — 强制终止`);
+    try { process.kill(pid, 'SIGKILL'); } catch {}
+    await new Promise((r) => setTimeout(r, 2000));
+    if (!pidAlive(pid)) { console.log(`boos: PID ${pid} 已终止`); return true; }
+    console.error(`boos: 无法终止 PID ${pid} — 请手动检查`);
+    return false;
+  }
+  return true;
 }
 
 function probe(port, timeoutMs = 800) {
@@ -147,35 +195,23 @@ function isSameVersion(running) {
     }
   }
 
-  // Case 1: existing instance on the preferred port
-  let existing = await probe(port);
-
-  // If an old version is running, ask it to shut down so the freshly
-  // installed code can take over. The launcher then falls through to
-  // Case 2 and spawns the new server itself.
-  if (existing && !isSameVersion(existing)) {
-    const installed = require('../package.json').version;
-    console.log(`boos upgrading · running v${existing.version} → installed v${installed}`);
-    await post(port, '/api/shutdown');
-    // Wait for the old process to actually exit so its port frees up.
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 200));
-      if (!(await probe(port, 200))) { existing = null; break; }
-    }
+  // Sprint 38: Always force-reclaim port 7780. No fallback ports.
+  // Kill any process on the target port — old instance, stale lock, anything.
+  const killed = await killOldInstance(port);
+  if (!killed) {
+    console.error(`boos: 启动失败 — 无法释放端口 ${port}。请手动终止占用进程后重试。`);
+    process.exit(1);
   }
 
+  // Double-check port is free.
+  const existing = await probe(port);
   if (existing) {
-    if (!SILENT) {
-      const opened = await post(port, '/api/spawn-browser');
-      console.log(`boos already running · v${existing.version} · http://localhost:${port}`);
-      if (!opened) console.log('(could not open a new window — server might be busy)');
-    } else {
-      console.log(`boos already running · ${protocol.raw}`);
-    }
-    return;
+    console.error(`boos: 启动失败 — 端口 ${port} 仍被占用 (v${existing.version})。无法启动新实例。`);
+    console.error(`  请运行: taskkill /PID <pid> /F  或重启电脑后重试。`);
+    process.exit(1);
   }
 
-  // Case 2: spawn detached server
+  // Spawn detached server.
   fs.mkdirSync(HOME, { recursive: true });
   const out = fs.openSync(LOG, 'a');
   fs.writeSync(out, `\n[${new Date().toISOString()}] boos starting (protocol=${protocol?.raw || '-'})...\n`);
@@ -186,6 +222,8 @@ function isSameVersion(running) {
     windowsHide: true,
     env: {
       ...process.env,
+      // Force port 7780 — server must not fall back to other ports.
+      BOOS_PORT: String(port),
       // Suppress the server's own auto-spawn of a browser when this launch
       // came from a boos:// click — the PWA window that fired it is the
       // browser, and a second window would just be noise.
@@ -194,28 +232,20 @@ function isSameVersion(running) {
   });
   child.unref();
 
-  // Poll /api/health for up to ~10s. Once it answers we know the server
-  // is fully booted (port is bound, config loaded, snapshot loop running).
-  // The actual port may differ from the preferred one if it was taken,
-  // so on each iteration we re-probe the preferred port first, then fall
-  // back to scanning preferred+1..preferred+9.
-  const portsToTry = [port, ...Array.from({ length: 9 }, (_, i) => port + i + 1)];
-  let actualPort = null;
+  // Poll ONLY port 7780 for up to 15s. No fallback scanning.
   let ready = null;
-  outer:
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 75; i++) {
     await new Promise((r) => setTimeout(r, 200));
-    for (const p of portsToTry) {
-      const r = await probe(p, 300);
-      if (r) { ready = r; actualPort = p; break outer; }
-    }
+    const r = await probe(port, 300);
+    if (r) { ready = r; break; }
   }
   if (!ready) {
-    console.error(`boos server did not come up in 10s. Check ${LOG}`);
+    console.error(`boos: 启动失败 — 服务器在 15s 内未就绪于端口 ${port}。`);
+    console.error(`  查看日志: ${LOG}`);
     process.exit(1);
   }
   console.log(`boos started · v${ready.version}`);
-  console.log(`backend:  http://localhost:${actualPort}${actualPort !== port ? `  (preferred ${port} was taken)` : ''}`);
+  console.log(`backend:  http://localhost:${port}`);
   console.log(`frontend: https://MistyBridge.github.io/boos/v1/`);
   console.log(`logs:     ${LOG}`);
 
