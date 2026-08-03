@@ -3,9 +3,9 @@
 // Sprint 38 vFinal: _buildWakeCommand + _injectCommand unit tests + Settlement flow.
 //
 // P0: _buildWakeCommand — always returns bare 'check_inbox[BOOS]' (no context header).
-//     Multi-line injection is not feasible (two \n\r submits race). Context arrives
+//     Multi-line injection is not feasible (two \r\n submits race). Context arrives
 //     via SSE + inbox response. PTY is ONLY the wake trigger.
-// P1: _injectCommand — burst/typed/paste modes, \n\r appended.
+// P1: _injectCommand — burst/typed/paste modes, \r\n appended.
 // P2: Settlement notification — Worker respond → PM inbox → PM reject → Worker inbox.
 
 const { test, describe, before, after } = require('node:test');
@@ -114,14 +114,14 @@ describe('_injectCommand (Sprint 38 vFinal)', () => {
     writes = [];
   });
 
-  test('burst mode — appends \\n\\r (LF+CR, 0x0A 0x0D)', () => {
+  test('burst mode — appends \\r\\n (CR+LF, 0x0D 0x0A)', () => {
     writes = [];
     _injectCommand('sess-test', 'check_inbox[BOOS]');
     assert.equal(writes.length, 1, 'should have exactly one write');
-    assert.equal(writes[0].data, 'check_inbox[BOOS]\n\r',
-      'should append \\n\\r for submit');
-    assert.ok(writes[0].data.endsWith('\n\r'),
-      'should end with LF+CR');
+    assert.equal(writes[0].data, 'check_inbox[BOOS]\r\n',
+      'should append \\r\\n for submit');
+    assert.ok(writes[0].data.endsWith('\r\n'),
+      'should end with CR+LF');
   });
 
   test('full pipeline: _buildWakeCommand → _injectCommand', () => {
@@ -131,8 +131,8 @@ describe('_injectCommand (Sprint 38 vFinal)', () => {
     });
     _injectCommand('sess-test', cmd);
     assert.equal(writes.length, 1);
-    // _buildWakeCommand returns bare check_inbox[BOOS], _injectCommand appends \n\r
-    assert.equal(writes[0].data, 'check_inbox[BOOS]\n\r');
+    // _buildWakeCommand returns bare check_inbox[BOOS], _injectCommand appends \r\n
+    assert.equal(writes[0].data, 'check_inbox[BOOS]\r\n');
   });
 
   test('paste mode — wraps in bracketed-paste escape sequences', () => {
@@ -144,7 +144,7 @@ describe('_injectCommand (Sprint 38 vFinal)', () => {
       assert.equal(writes.length, 1);
       assert.ok(writes[0].data.startsWith('\x1b[200~'), 'should start with bracketed-paste start');
       assert.ok(writes[0].data.endsWith('\x1b[201~'), 'should end with bracketed-paste end');
-      assert.ok(writes[0].data.includes('check_inbox[BOOS]\n\r'), 'should contain command + \\n\\r');
+      assert.ok(writes[0].data.includes('check_inbox[BOOS]\r\n'), 'should contain command + \\r\\n');
     } finally {
       process.env.BOOS_PTY_INJECT_MODE = prev;
     }
@@ -156,7 +156,7 @@ describe('_injectCommand (Sprint 38 vFinal)', () => {
     process.env.BOOS_PTY_INJECT_MODE = 'typed';
     try {
       // _typedInject is async but writes first char synchronously.
-      _injectCommand('sess-test', 'AB\n\r');
+      _injectCommand('sess-test', 'AB\r\n');
       // At least first char should have been written
       assert.ok(writes.length >= 1, 'typed mode should write at least first char');
     } finally {
@@ -387,7 +387,7 @@ describe('wakeAgent bare PTY trigger (Sprint 38 vFinal)', () => {
     assert.equal(cmd2, 'check_inbox[BOOS]');
   });
 
-  test('_injectCommand appends \\n\\r to trigger submit', () => {
+  test('_injectCommand appends \\r\\n to trigger submit', () => {
     const { _injectCommand, _writeToPty } = require('../lib/agentBus/notificationsWake');
     const writes = [];
     const orig = _writeToPty;
@@ -397,7 +397,7 @@ describe('wakeAgent bare PTY trigger (Sprint 38 vFinal)', () => {
     try {
       _injectCommand('sess-x', 'check_inbox[BOOS]');
       assert.equal(writes.length, 1);
-      assert.equal(writes[0].d, 'check_inbox[BOOS]\n\r');
+      assert.equal(writes[0].d, 'check_inbox[BOOS]\r\n');
     } finally {
       require('../lib/agentBus/notificationsWake')._writeToPty = orig;
     }
