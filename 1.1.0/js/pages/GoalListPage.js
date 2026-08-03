@@ -1,17 +1,18 @@
-// Sprint 37 Phase 4: GoalListPage — card-based goal list with inline actions.
-// Calls goal_list + goal_status. Supports create/archive/pause/start.
-// Route: /goals (sidebar "目标" tab)
+// Sprint 37: GoalListPage — goal list with filter tabs, sort, progress bars,
+// and quick actions (activate / start / pause / archive / create).
+// Reuses goals signal + API. Complements GoalPage's expandable detail view.
 
 import { html } from '../html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { goals } from '../state.js';
-import { fetchGoals, startGoal, pauseGoal, archiveGoal, getGoalDetail } from '../api.js';
+import { fetchGoals, activateGoal, startGoal, pauseGoal, archiveGoal } from '../api.js';
 import { setToast } from '../toast.js';
 import { boosConfirm } from '../dialog.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { PageTitleBar } from '../components/PageTitleBar.js';
 import { GoalCreateModal } from '../components/GoalCreateModal.js';
-import { T } from '../i18n.js';
+
+// ── Constants ──────────────────────────────────────────────────────
 
 const STATUS = {
   draft:     { cls: 'task-status-pending', label: '草稿' },
@@ -21,136 +22,238 @@ const STATUS = {
   archived:  { cls: 'task-status-cancel',  label: '已归档' },
 };
 
-const TABS = [
-  { key: 'active', label: '进行中' },
-  { key: 'archived', label: '已归档' },
+const FILTER_TABS = [
+  { key: 'all',       label: '全部' },
+  { key: 'active',    label: '进行中' },
+  { key: 'draft',     label: '草稿' },
+  { key: 'completed', label: '已完成' },
 ];
+
+const SORT_OPTIONS = [
+  { key: 'title',    label: '名称' },
+  { key: 'progress', label: '进度' },
+  { key: 'status',   label: '状态' },
+  { key: 'updated',  label: '更新时间' },
+];
+
+const STATUS_ORDER = { active: 0, paused: 1, draft: 2, completed: 3, archived: 4 };
+
+// ── Helpers ────────────────────────────────────────────────────────
 
 function statusBadge(s) {
   const c = STATUS[s] || STATUS.draft;
   return html`<span class="task-status-chip ${c.cls}">${c.label}</span>`;
 }
 
-function GoalCard({ goal, onSelect, onAction }) {
+function taskProgress(goal) {
+  const tasks = goal.tasks || [];
+  const done = tasks.filter((t) => t.status === 'completed' || t.status === 'done').length;
+  return { done, total: tasks.length };
+}
+
+function ProgressBar({ done, total }) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return html`
+    <div style="display:flex;align-items:center;gap:6px;min-width:90px;">
+      <div style="flex:1;height:4px;background:var(--border);border-radius:999px;overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:${pct >= 100 ? 'var(--green)' : 'var(--ink-mid)'};border-radius:999px;transition:width .3s ease;" />
+      </div>
+      <span style="font-size:11px;color:var(--ink-muted);font-variant-numeric:tabular-nums;white-space:nowrap;">${done}/${total}</span>
+    </div>`;
+}
+
+function sortGoals(list, key) {
+  const arr = [...list];
+  switch (key) {
+    case 'progress':
+      arr.sort((a, b) => {
+        const pa = taskProgress(a), pb = taskProgress(b);
+        return (pb.total ? pb.done / pb.total : 0) - (pa.total ? pa.done / pa.total : 0);
+      });
+      break;
+    case 'status':
+      arr.sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99));
+      break;
+    case 'updated':
+      arr.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
+      break;
+    default: // title
+      arr.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  }
+  return arr;
+}
+
+// ── GoalRow ────────────────────────────────────────────────────────
+
+function GoalRow({ goal, onRefresh, onSelect }) {
   const [busy, setBusy] = useState(false);
+  const { done, total } = taskProgress(goal);
   const dags = goal.dags || [];
-  const dagCount = dags.length;
-  const updated = goal.updated_at || goal.created_at || '';
   const s = goal.status;
 
-  const canStart = s === 'draft' || s === 'paused';
-  const canPause = s === 'active';
-  const canArchive = s === 'completed' || s === 'paused';
+  const canActivate = s === 'draft';
+  const canStart    = s === 'draft' || s === 'paused';
+  const canPause    = s === 'active';
+  const canArchive  = s === 'completed' || s === 'paused';
 
-  const doAction = async (action, e) => {
-    e.stopPropagation();
+  async function doAction(fn, label, needConfirm) {
+    if (busy) return;
+    if (needConfirm) {
+      const ok = await boosConfirm(needConfirm);
+      if (!ok) return;
+    }
     setBusy(true);
     try {
-      let r;
-      if (action === 'start') {
-        if (!await boosConfirm(`启动目标「${goal.title}」？PM 将开始执行关联的 DAG 任务。`)) { setBusy(false); return; }
-        r = await startGoal(goal.goal_id || goal.id);
-      } else if (action === 'pause') {
-        if (!await boosConfirm(`暂停目标「${goal.title}」？`)) { setBusy(false); return; }
-        r = await pauseGoal(goal.goal_id || goal.id);
-      } else if (action === 'archive') {
-        if (!await boosConfirm(`归档目标「${goal.title}」？`)) { setBusy(false); return; }
-        r = await archiveGoal(goal.goal_id || goal.id);
-      }
-      if (r && r.ok) {
-        setToast(action === 'start' ? '已启动' : action === 'pause' ? '已暂停' : '已归档');
-        if (onAction) onAction();
-      } else if (r && r.error) {
-        setToast(r.error);
-      }
-    } catch (err) { setToast(err.message || '操作失败'); }
+      const r = await fn(goal.goal_id || goal.id);
+      if (r && r.ok) { setToast(label); onRefresh(); }
+      else if (r && r.error) { setToast(r.error, 'error'); }
+    } catch (e) { setToast(e.message || '操作失败', 'error'); }
     setBusy(false);
-  };
+  }
 
   return html`
-    <div class="decision-card" style="cursor:pointer;">
-      <div class="decision-card-head" onClick=${() => onSelect && onSelect(goal)}>
-        <span class="decision-card-title" style="font-weight:600;font-size:15px;">${goal.title || '未命名目标'}</span>
-        <span style="display:flex;gap:6px;align-items:center;">
-          ${statusBadge(s)}
-        </span>
+    <div class="decision-card" style="cursor:pointer;padding:var(--s-2) var(--s-3);">
+      <div onClick=${() => onSelect && onSelect(goal)}>
+        <div style="display:flex;align-items:center;gap:var(--s-2);flex-wrap:wrap;">
+          <!-- title + status -->
+          <div style="flex:1;min-width:120px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:500;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              ${goal.title || '未命名目标'}
+            </span>
+            ${statusBadge(s)}
+          </div>
+
+          <!-- progress -->
+          <${ProgressBar} done=${done} total=${total} />
+
+          <!-- meta -->
+          <span style="font-size:11px;color:var(--ink-muted);white-space:nowrap;">
+            DAG ${dags.length}
+          </span>
+          <span style="font-size:11px;color:var(--ink-muted);white-space:nowrap;">
+            ${goal.updated_at ? new Date(goal.updated_at).toLocaleDateString() : '-'}
+          </span>
+        </div>
+
+        ${goal.description ? html`
+          <p style="font-size:12px;color:var(--ink-muted);margin:4px 0 0;line-height:1.4;
+                    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+            ${goal.description.slice(0, 200)}
+          </p>
+        ` : null}
       </div>
-      <div class="decision-card-meta" style="display:flex;gap:var(--s-3);font-size:12px;color:var(--ink-mid);margin-top:4px;" onClick=${() => onSelect && onSelect(goal)}>
-        <span>DAG: ${dagCount}</span>
-        <span>更新: ${updated ? new Date(updated).toLocaleDateString() : '-'}</span>
-      </div>
-      ${goal.description ? html`
-        <p style="font-size:13px;color:var(--ink-muted);margin:var(--s-1) 0 0;line-height:1.4;
-                  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;"
-           onClick=${() => onSelect && onSelect(goal)}>
-          ${goal.description.slice(0, 200)}
-        </p>
-      ` : null}
-      <div style="display:flex;gap:var(--s-1);margin-top:var(--s-2);" onClick=${(e) => e.stopPropagation()}>
-        ${canStart ? html`<button class="action subtle" style="font-size:11px;padding:2px 10px;" onClick=${(e) => doAction('start', e)} disabled=${busy}>▶ 启动</button>` : null}
-        ${canPause ? html`<button class="action subtle" style="font-size:11px;padding:2px 10px;" onClick=${(e) => doAction('pause', e)} disabled=${busy}>⏸ 暂停</button>` : null}
-        ${canArchive ? html`<button class="action subtle" style="font-size:11px;padding:2px 10px;" onClick=${(e) => doAction('archive', e)} disabled=${busy}>📦 归档</button>` : null}
+
+      <!-- actions -->
+      <div style="display:flex;gap:6px;margin-top:var(--s-2);" onClick=${(e) => e.stopPropagation()}>
+        ${canActivate ? html`
+          <button class="action subtle small" style="font-size:11px;padding:2px 10px;"
+                  onClick=${() => doAction(activateGoal, '已激活', null)} disabled=${busy}>
+            激活
+          </button>
+        ` : null}
+        ${canStart ? html`
+          <button class="action subtle small" style="font-size:11px;padding:2px 10px;"
+                  onClick=${() => doAction(startGoal, '已启动', `启动目标「${goal.title}」？PM 将开始执行关联的 DAG 任务。`)} disabled=${busy}>
+            启动
+          </button>
+        ` : null}
+        ${canPause ? html`
+          <button class="action subtle small" style="font-size:11px;padding:2px 10px;"
+                  onClick=${() => doAction(pauseGoal, '已暂停', `暂停目标「${goal.title}」？`)} disabled=${busy}>
+            暂停
+          </button>
+        ` : null}
+        ${canArchive ? html`
+          <button class="action subtle small" style="font-size:11px;padding:2px 10px;"
+                  onClick=${() => doAction(archiveGoal, '已归档', `归档目标「${goal.title}」？`)} disabled=${busy}>
+            归档
+          </button>
+        ` : null}
       </div>
     </div>`;
 }
 
+// ── Page ───────────────────────────────────────────────────────────
+
 export function GoalListPage({ onNavigate }) {
   const [tab, setTab] = useState('active');
-  const [loading, setLoading] = useState(false);
+  const [sort, setSort] = useState('status');
   const [showCreate, setShowCreate] = useState(false);
 
   const list = Array.isArray(goals.value) ? goals.value : [];
-  const filtered = list.filter((g) => {
-    if (tab === 'active') return g.status !== 'archived';
-    return g.status === 'archived';
-  });
 
-  const load = async () => {
-    setLoading(true);
-    await fetchGoals().catch(() => setToast('加载目标列表失败'));
-    setLoading(false);
-  };
+  const load = () => fetchGoals().catch(() => setToast('加载目标列表失败', 'error'));
 
-  useEffect(() => { load(); }, []);
+  // initial load + 10s auto-poll
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // filter
+  const filtered = (() => {
+    if (tab === 'all') return list.filter((g) => g.status !== 'archived');
+    if (tab === 'active') return list.filter((g) => g.status === 'active' || g.status === 'draft' || g.status === 'paused');
+    return list.filter((g) => (g.status || 'draft') === tab);
+  })();
+
+  const sorted = sortGoals(filtered, sort);
 
   const handleSelect = (goal) => {
     if (onNavigate) onNavigate('goal-detail', goal.goal_id || goal.id);
   };
 
-  const handleNew = () => setShowCreate(true);
-
   return html`
     <${ErrorBoundary} name="GoalListPage">
-      <${PageTitleBar} title=${T.goalsPage?.title || '目标'} />
-      <div class="settings-scroll">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--s-3);">
+      <${PageTitleBar} title="目标列表" />
+
+      <div class="decisions-page">
+        <!-- toolbar: tabs + sort + create -->
+        <div style="display:flex;align-items:center;gap:var(--s-2);margin-bottom:var(--s-3);flex-wrap:wrap;">
           <div class="decisions-filter">
-            ${TABS.map((t) => html`
-              <button class="decision-filter-tab ${tab === t.key ? 'is-active' : ''}"
+            ${FILTER_TABS.map((t) => html`
+              <button key=${t.key} class="decision-filter-tab ${tab === t.key ? 'is-active' : ''}"
                       onClick=${() => setTab(t.key)}>
                 ${t.label}
               </button>
             `)}
           </div>
-          <button class="action primary" onClick=${handleNew} style="font-size:13px;">+ 新建目标</button>
+
+          <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:var(--ink-muted);">排序</span>
+            <select class="field" style="font-size:12px;padding:3px 6px;"
+                    value=${sort} onChange=${(e) => setSort(e.target.value)}>
+              ${SORT_OPTIONS.map((o) => html`
+                <option key=${o.key} value=${o.key}>${o.label}</option>
+              `)}
+            </select>
+          </div>
+
+          <button class="action primary small" onClick=${() => setShowCreate(true)} style="font-size:12px;padding:4px 14px;">
+            新建目标
+          </button>
         </div>
 
-        ${loading ? html`<p class="decision-loading">加载中…</p>` : null}
-        ${!loading && filtered.length === 0 ? html`
+        <!-- list -->
+        ${sorted.length === 0 ? html`
           <div class="decisions-empty">
             <h3 class="decisions-empty-title">暂无目标</h3>
-            <p class="decisions-empty-hint">创建第一个目标来开始 DAG 任务编排。</p>
+            <p class="decisions-empty-hint">${tab === 'all' ? '创建第一个目标来开始 DAG 任务编排。' : '此状态下没有目标。'}</p>
           </div>
-        ` : null}
-        ${filtered.length > 0 ? html`
+        ` : html`
           <div class="decisions-list">
-            ${filtered.map((g) => html`<${GoalCard} key=${g.goal_id || g.id} goal=${g} onSelect=${handleSelect} onAction=${load} />`)}
+            ${sorted.map((g) => html`
+              <${GoalRow} key=${g.goal_id || g.id} goal=${g} onRefresh=${load} onSelect=${handleSelect} />
+            `)}
           </div>
-        ` : null}
+        `}
       </div>
 
-      ${showCreate ? html`<${GoalCreateModal}
-        onClose=${() => setShowCreate(false)}
-        onCreated=${() => { setShowCreate(false); load(); }} />` : null}
+      ${showCreate ? html`
+        <${GoalCreateModal}
+          onClose=${() => setShowCreate(false)}
+          onCreated=${() => { setShowCreate(false); load(); }} />
+      ` : null}
     </${ErrorBoundary}>`;
 }
