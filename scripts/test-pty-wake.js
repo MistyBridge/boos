@@ -65,7 +65,7 @@ async function testPtyWrite() {
 
   // 由于 wake_agent API 需要 agent-bus 连接，我们直接测试 PTY write
   // 创建一个简单的 HTTP 服务器来接收 wake 请求
-  const wakeSignal = '\n[agent-bus] 📨 测试唤醒信号 — 请调用 check_inbox(wait=false) 收取任务\n';
+  const wakeSignal = '\n[agent-bus] 📨 测试唤醒信号 — 请调用 check_inbox[BOOS, test-task] 收取任务\n';
 
   console.log('   Wake signal:', JSON.stringify(wakeSignal));
   console.log('\n   To test PTY write, you need to:');
