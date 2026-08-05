@@ -13,9 +13,8 @@ import { PageTitleBar } from '../components/PageTitleBar.js';
 
 function fmt(num) {
   if (num == null) return '0';
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
-  if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K';
-  return String(Math.round(num));
+  // Exact number with locale separators — no abbreviations.
+  return Math.round(num).toLocaleString();
 }
 
 function hitRateColor(rate) {
@@ -109,13 +108,12 @@ export function UsagePage() {
       <div class="decisions-page">
         <!-- summary cards -->
         <div style="display:flex;gap:var(--s-2);margin-bottom:var(--s-3);flex-wrap:wrap;">
-          <${SummaryCard} label="总输入 Token" value=${fmt(ws.input)} color="var(--ink)" />
-          <${SummaryCard} label="总输出 Token" value=${fmt(ws.output)} color="var(--ink)" />
-          <${SummaryCard} label="缓存读取" value=${fmt(ws.cacheRead)} color="#4a73a5" />
-          <${SummaryCard} label="缓存写入" value=${fmt(ws.cacheCreation)} sub="new entries" color="#4a73a5" />
+          <${SummaryCard} label="输入(未命中)" value=${fmt((ws.input || 0) + (ws.cacheCreation || 0))} color="var(--ink)" />
+          <${SummaryCard} label="输入(缓存命中)" value=${fmt(ws.cacheRead)} color="#4a8a4a" />
+          <${SummaryCard} label="输出" value=${fmt(ws.output)} color="var(--ink)" />
           <${SummaryCard} label="缓存命中率" value=${hitRate}
-            color=${hitRateColor(ws.hitRate)}
-            sub=${`${sessions.length} 个会话`} />
+            color=${hitRateColor(ws.hitRate)} />
+          <${SummaryCard} label="会话数" value=${sessions.length} color="var(--ink-mid)" />
         </div>
 
         <!-- sessions table -->
@@ -138,9 +136,8 @@ export function UsagePage() {
                   <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">会话</th>
                   <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">目录</th>
                   <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">状态</th>
-                  <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">输入</th>
-                  <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">缓存读</th>
-                  <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">缓存写</th>
+                  <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">输入(未命中)</th>
+                  <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">输入(缓存命中)</th>
                   <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">输出</th>
                   <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">命中率</th>
                 </tr>
@@ -168,9 +165,8 @@ export function UsagePage() {
                       <td style="padding:6px 8px;white-space:nowrap;">
                         <span style="font-size:10px;color:${s.status === 'running' ? '#4a73a5' : 'var(--ink-muted)'};">${statusLabel(s.status)}</span>
                       </td>
-                      <td style="padding:6px 8px;text-align:right;white-space:nowrap;">${fmt(u.input)}</td>
+                      <td style="padding:6px 8px;text-align:right;white-space:nowrap;">${fmt((u.input || 0) + (u.cacheCreation || 0))}</td>
                       <td style="padding:6px 8px;text-align:right;white-space:nowrap;">${fmt(u.cacheRead)}</td>
-                      <td style="padding:6px 8px;text-align:right;white-space:nowrap;">${fmt(u.cacheCreation)}</td>
                       <td style="padding:6px 8px;text-align:right;white-space:nowrap;">${fmt(u.output)}</td>
                       <td style="padding:6px 8px;text-align:right;white-space:nowrap;font-weight:600;color:${hrColor};">
                         ${hr != null ? hr.toFixed(1) + '%' : '—'}
@@ -178,7 +174,7 @@ export function UsagePage() {
                     </tr>
                     ${isExpanded ? html`
                       <tr key=${s.id + '-exp'}>
-                        <td colspan="8" style="padding:8px;">
+                        <td colspan="7" style="padding:8px;">
                           <div style="font-size:11px;color:var(--ink-muted);margin-bottom:4px;">
                             最近 ${(s.series || []).slice(-60).length} 条消息的 Token 使用趋势
                             <span style="margin-left:8px;display:inline-flex;align-items:center;gap:4px;">
