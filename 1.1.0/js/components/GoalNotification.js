@@ -4,6 +4,14 @@
 import { html } from '../html.js';
 import { signal } from '@preact/signals';
 
+// Inline SVG close icon — avoids emoji/special characters.
+const closeIcon = html`
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>`;
+
 // Shared signal for notifications — other modules can push to this.
 export const goalNotifications = signal([]);
 
@@ -48,7 +56,7 @@ export function GoalNotification() {
               </div>
               <button style="background:none;border:none;cursor:pointer;color:var(--ink-muted);font-size:14px;padding:0;line-height:1;"
                       onClick=${() => { goalNotifications.value = goalNotifications.value.filter((x) => x.id !== n.id); }}>
-                ×
+                ${closeIcon}
               </button>
             </div>
           </div>`;

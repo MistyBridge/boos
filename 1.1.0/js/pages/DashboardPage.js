@@ -10,6 +10,7 @@ import { setToast } from '../toast.js';
 import { boosConfirm, boosPrompt } from '../dialog.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { PageTitleBar } from '../components/PageTitleBar.js';
+import { DagStatusPanel } from '../components/DagStatusPanel.js';
 import { T } from '../i18n.js';
 
 // ── Constants ────────────────────────────────────────────────────────────
@@ -239,6 +240,9 @@ export function DashboardPage() {
   return html`<${ErrorBoundary} name="DashboardPage">
     <${PageTitleBar} title=${T.dashboard.title} />
     <div class="decisions-page">
+      <!-- DAG status overview (Sprint 37) -->
+      <${DagStatusPanel} workspace="boos" />
+
       <!-- Summary bar -->
       <div class="row" style="gap:var(--s-4);margin-bottom:var(--s-3);">
         <div class="row" style="gap:6px;font-size:13px;">

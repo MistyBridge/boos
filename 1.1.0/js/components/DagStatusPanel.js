@@ -5,7 +5,7 @@
 import { html } from '../html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { dagList } from '../state.js';
-import { fetchDags, fetchDagStatus } from '../api.js';
+import { fetchDagList, fetchDagStatus } from '../api.js';
 import { setToast } from '../toast.js';
 import { Card } from './Card.js';
 
@@ -162,7 +162,7 @@ export function DagStatusPanel({ workspace = 'boos' }) {
 
   const load = async () => {
     setLoading(true);
-    try { await fetchDags(workspace); } catch { /* keep stale */ }
+    try { await fetchDagList(workspace); } catch { /* keep stale */ }
     setLoading(false);
   };
 
