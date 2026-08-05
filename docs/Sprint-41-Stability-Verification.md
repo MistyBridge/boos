@@ -22,31 +22,32 @@
 
 ---
 
-## Phase 2: DAG/Goal 前端集成验证 (A3 + PM)
+## Phase 2: DAG/Goal 前端集成验证 (A3 + PM) ✅
 
-### 2.1 前端组件验收
-- [ ] GoalListPage (`/goals`) — 卡片列表，活跃/归档 tabs
-- [ ] NewGoalPage (`/goals/new`) — 创建表单
-- [ ] GoalDetailPage (`/goals/:goalId`) — DAG 图 + 反馈 + 启停
-- [ ] CompositeDagGraph — dagre+SVG，缩放/拖拽
-- [ ] DagNodeModal — 4 tabs: 详情/选择题/反馈/历史
-- [ ] GoalNotification — 右下角弹窗
-- [ ] 路由注册 (App.js) + 导航项 (Sidebar.js)
+### 2.1 前端组件验收 ✅
+- [x] GoalListPage (`/goals`) — 卡片列表，活跃/归档 tabs
+- [x] NewGoalPage (`/goals/new`) — 创建表单
+- [x] GoalDetailPage (`/goals/:goalId`) — DAG 图 + 反馈 + 启停
+- [x] CompositeDagGraph — dagre+SVG，缩放/拖拽
+- [x] DagNodeModal — 4 tabs: 详情/选择题/反馈/历史
+- [x] GoalNotification — 右下角弹窗
+- [x] 路由注册 (App.js) + 导航项 (Sidebar.js)
 
-### 2.2 MCP Tools 集成测试
-- [ ] goal_create/list/status/start/pause 端到端
-- [ ] dag_add_questions/answer_question 端到端
-- [ ] dag_status 返回正确 DAG 状态
+### 2.2 MCP Tools 集成测试 ✅
+- [x] goal_create/list/status/start/pause 端到端
+- [x] dag_add_questions/answer_question 端到端
+- [x] dag_status 返回正确 DAG 状态
 
 ---
 
-## Phase 3: 技术债务清理 (PM + A4)
+## Phase 3: 技术债务清理 (PM + A4) 🔄
 
-### 3.1 store.js 重构
+### 3.1 store.js 重构 🔄
 - [ ] 当前 418 行，拆分为 2-3 个模块
-- [ ] 提取 task operations → `storeTasks.js` (已删除，需重新设计)
+- [ ] 提取 task operations → `storeTasks.js`
 - [ ] 提取 agent operations → `storeAgents.js`
 - [ ] 保留 store.js 作为 facade (< 200 行)
+- [ ] 任务已派发 A4: `task_msfor5pi_os2qbs`
 
 ### 3.2 代码清理
 - [ ] 移除临时文件 (tmp-*.js)
