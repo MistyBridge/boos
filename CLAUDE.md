@@ -26,7 +26,7 @@ version router.
 │  https://MistyBridge.github.io/boos/X.Y.Z/  ← per-version frontend
 └────────────┬──────────────────────────┘
              │  fetch /api/*   (CORS, allow-list)
-             │  ws://localhost:7777/ws/*
+             │  ws://localhost:7780/ws/*
              ▼
 ┌── local backend ──────────────────────┐
 │  npm i -g @MistyBridge/boos             │
@@ -41,7 +41,7 @@ version router.
 ```
 
 **Version routing.** GH Pages root (`/boos/`) hosts a tiny static
-router (`pages-root/index.html`) that probes `localhost:7777/api/health`
+router (`pages-root/index.html`) that probes `localhost:7780/api/health`
 and redirects to `./<backend.version>/`. Each release publishes a fresh
 `/boos/<X.Y.Z>/` subdir; old ones stay forever via the workflow's
 `keep_files: true`. Result: a 1:1 frontend↔backend version pin, no
@@ -59,7 +59,7 @@ register at install time). No need to redirect to a stale version.
 
 **Dev mode.** When running from a checkout (`__dirname` not under
 `node_modules`), the backend ALSO serves `public/` so contributors can
-iterate at `localhost:7777/` without pushing. In dev there's no
+iterate at `localhost:7780/` without pushing. In dev there's no
 `<meta>` tag → the version guard no-ops.
 
 ## Run
@@ -81,12 +81,12 @@ If you don't want the auto-opened window (e.g. you live in the PWA),
 just visit `https://MistyBridge.github.io/boos/` — when backend is
 down you see the inline OfflineBanner with a **Start boos** button.
 
-Default port `7777`, default workDir `~/boos-workspaces`. Config +
+Default port `7780`, default workDir `~/boos-workspaces`. Config +
 state live at `~/.boos/` (override with `BOOS_HOME=<path>`). All
 settings editable through the Configure page
 (`~/.boos/config.json` on disk). Notable knobs:
 
-- `port` (default `7777`) — preferred listen port. If taken, boos tries `+1..+9` then asks the OS for any free port.
+- `port` (default `7780`) — preferred listen port. If taken, boos tries `+1..+9` then asks the OS for any free port.
 - `resumeMode` (default `latest`) — `latest` uses each CLI's `resumeLatestArgs`; `picker` uses `resumePickerArgs`.
 - `clis` — array of CLI definitions. Built-ins for `claude`, `codex`, `copilot`; users can add `other` CLIs with custom `command`, `args`, `resumeLatestArgs`, `resumePickerArgs`, `shell` (direct/pwsh/cmd).
 - `defaultCliId` — which CLI the Launch page pre-selects.
@@ -293,7 +293,7 @@ matching version.
 
 **One source of truth for cross-origin.** `public/js/backend.js`
 exports `httpBase()` and `wsBase()`. Localhost → same-origin (empty
-base). Anything else → `http://localhost:7777`. CORS on the backend
+base). Anything else → `http://localhost:7780`. CORS on the backend
 allows `https://MistyBridge.github.io` only — never `*`.
 
 ## API surface

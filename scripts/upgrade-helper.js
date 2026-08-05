@@ -21,8 +21,8 @@
 //   4. Helper waits for the old port + pid to be gone (up to 30s).
 //   5. Helper runs `npm i -g @MistyBridge/boos@<target>`, captures stdout +
 //      stderr line by line, pushes each line into the SSE stream.
-//   6. On success: spawn boos.cmd (which boots the new server on 7777),
-//      push a `done` SSE event with redirectTo=7777 so the UI navigates
+//   6. On success: spawn boos.cmd (which boots the new server on 7780),
+//      push a `done` SSE event with redirectTo=7780 so the UI navigates
 //      back. Keep the helper server alive for ~30s for late clients,
 //      then exit + release the lock.
 //   7. On failure: keep the helper server alive indefinitely so the user
@@ -424,9 +424,9 @@ h1 {
       bannerEl.className = 'banner success';
       bannerEl.innerText = 'Upgrade complete. Redirecting to the new backend…';
       closeBtn.style.display = '';
-      // Give the new backend a moment to bind 7777 before redirecting.
+      // Give the new backend a moment to bind 7780 before redirecting.
       setTimeout(() => {
-        location.href = data.redirectTo || 'http://localhost:7777/';
+        location.href = data.redirectTo || 'http://localhost:7780/';
       }, 1500);
     } catch {}
   });
@@ -676,7 +676,7 @@ httpServer.listen(HELPER_PORT, '127.0.0.1', () => {
 
   // Stay alive briefly so late-arriving SSE clients still see the
   // success state. After that the helper exits and releases the lock;
-  // the new boos at port 7777 takes over.
+  // the new boos at port 7780 takes over.
   setTimeout(() => { removeLock(); process.exit(0); }, 30_000);
 })().catch((e) => {
   errorMsg = e?.message || String(e);

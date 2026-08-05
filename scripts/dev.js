@@ -4,12 +4,12 @@
 // Dev launcher · fully isolates from the user's prod boos install.
 //
 // Why: many contributors run the published `@MistyBridge/boos` package
-// for their day-to-day work (port 7777, ~/.boos). If `npm run dev`
+// for their day-to-day work (port 7780, ~/.boos). If `npm run dev`
 // reused the same data dir + port, every hot-reload would clobber the
 // live sessions.json. So dev gets its own:
 //
 //   - BOOS_HOME   → ~/.boos-dev/   (separate config.json, sessions.json, folders.json)
-//   - port        → 7788           (no contention with prod 7777)
+//   - port        → 7788           (no contention with prod 7780)
 //   - workDir     → ~/boos-workspaces-dev (separate workspace tree)
 //   - no browser auto-open (we're iterating in an already-open tab)
 //
