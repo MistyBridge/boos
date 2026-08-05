@@ -124,8 +124,8 @@ store.test.js 162/162 pass。
 
 ### 5.5 待办
 
-- [ ] 各 agent CLAUDE.md 更新为 router 模式用法
-- [ ] 实测缓存命中率回升验证
+- [x] 各 agent CLAUDE.md 更新为 router 模式用法 (A1/A2/A3/A4/PMO-A5 全部更新)
+- [ ] 实测缓存命中率回升验证 — 本会话已在 router 模式下运行 (3 tools)
 
 ---
 

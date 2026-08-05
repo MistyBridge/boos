@@ -182,6 +182,11 @@ BOOS 与外部系统的桥梁。三个方向：**Agent-Bus 集成 (P0)** → **M
 
 ## Agent-Bus 事件驱动工作流 (Sprint 21)
 
+> **Sprint 41 Router Mode**: agent-bus 通过 **3 个恒定工具** 暴露（`check_inbox`,
+> `agent_bus_list_tools`, `agent_bus_call`），完整 68 工具目录按需查询。工具定义段
+> 恒定 → prompt cache 前缀稳定 → 命中率大幅提升。调用任意 agent-bus 工具 =
+> `agent_bus_call(tool_name, args)`；先 `agent_bus_list_tools` 查目录/单工具 schema。
+
 ### 启动协议 (强制)
 
 ```

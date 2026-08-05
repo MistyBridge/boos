@@ -22,6 +22,11 @@
 
 ## 启动 Checklist
 
+> **Sprint 41 Router Mode**: agent-bus 通过 **3 个恒定工具** 暴露（`check_inbox`,
+> `agent_bus_list_tools`, `agent_bus_call`），完整 68 工具目录按需查询。工具定义段
+> 恒定 → prompt cache 前缀稳定。调用任意 agent-bus 工具 =
+> `agent_bus_call(tool_name, args)`；先 `agent_bus_list_tools` 查目录/单工具 schema。
+
 1. `register_agent(name="PMO", workspace="boos", role="pmo", project="boos-core", capabilities=["pmo","escalation"])`
 2. `check_inbox` — 非阻塞检查是否有 PM 或 ROOT 指派的任务
 3. 有任务 → 处理 → `respond_task` → 回到等待态

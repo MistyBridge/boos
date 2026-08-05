@@ -164,9 +164,15 @@ Workspace: `boos` | UID = Claude `--resume` UUID
 
 ## 可用 MCP 服务器
 
+> **Sprint 41 Router Mode**: `agent-bus` 通过 **3 个恒定工具** 暴露（`check_inbox`,
+> `agent_bus_list_tools`, `agent_bus_call`），完整 68 工具目录按需查询。工具定义段
+> 恒定 → prompt cache 前缀稳定 → 命中率大幅提升。调用任意 agent-bus 工具 =
+> `agent_bus_call(tool_name, args)`；先 `agent_bus_list_tools` 查目录/单工具 schema。
+> 开关: `BOOS_MCP_ROUTER_MODE=1`(默认) / `0`(传统全量工具面)。
+
 | MCP | 工具数 | 状态 |
 |-----|--------|:--:|
-| `agent-bus` | 26 tools (register/send/respond/broadcast/wake/workflow...) | ✅ |
+| `agent-bus` | Router 3 tools → 68 tools on-demand (agent_bus_call) | ✅ |
 | `filesystem` | 14 tools (read/write/edit/search/directory...) | ✅ |
 | `openviking` | 16 tools (recall/remember/search/code_search/forget...) | ✅ |
 | `memory` | 10 tools (entities/relations/observations/graph) | ✅ |

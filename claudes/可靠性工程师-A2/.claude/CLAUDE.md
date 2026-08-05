@@ -256,6 +256,11 @@ D:\AI IDE\CC_BOOS\
 
 ## Agent-Bus 事件驱动工作流
 
+> **Sprint 41 Router Mode**: agent-bus 通过 **3 个恒定工具** 暴露（`check_inbox`,
+> `agent_bus_list_tools`, `agent_bus_call`），完整 68 工具目录按需查询。工具定义段
+> 恒定 → prompt cache 前缀稳定 → 命中率大幅提升。调用任意 agent-bus 工具 =
+> `agent_bus_call(tool_name, args)`；先 `agent_bus_list_tools` 查目录/单工具 schema。
+
 ### 启动流程（强制）
 1. `register_agent(name="可靠性工程师-A2", workspace="boos", cli_session_id="81c99498-c60d-4d92-8ae8-fe5ec41d5cab")`
 2. `check_inbox` — 非阻塞，立即返回

@@ -320,6 +320,11 @@ export function MyComponent({ prop1, prop2 }) {
 
 ## Agent-Bus 工作流
 
+> **Sprint 41 Router Mode**: agent-bus 通过 **3 个恒定工具** 暴露（`check_inbox`,
+> `agent_bus_list_tools`, `agent_bus_call`），完整 68 工具目录按需查询。工具定义段
+> 恒定 → prompt cache 前缀稳定。调用任意 agent-bus 工具 =
+> `agent_bus_call(tool_name, args)`；先 `agent_bus_list_tools` 查目录/单工具 schema。
+
 ### 启动（强制 — 不做其他事）
 
 1. `register_agent(name="前端工程师-A3", workspace="boos", cli_session_id="90490923-dc5b-4ac8-be3f-62c3efbe2bb0")`
