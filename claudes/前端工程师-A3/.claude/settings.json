@@ -1,9 +1,14 @@
 {
-  "skills": {
-    "autoLoad": true,
-    "paths": [
-      "D:/AI IDE/CC_BOOS/claudes/前端工程师/.claude/skills"
-    ]
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "sk-ec5d027792304d94a26c98408a63d16b",
+    "ANTHROPIC_MODEL": "DeepSeek-v4-flash",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "DeepSeek-v4-flash",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "DeepSeek-v4-flash",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "DeepSeek-v4-flash",
+    "ENABLE_TOOL_SEARCH": "true",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "DISABLE_AUTOUPDATER": "1"
   },
   "attribution": {
     "commit": "",

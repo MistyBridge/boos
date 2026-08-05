@@ -19,7 +19,7 @@ const origNoAgentBus = process.env.BOOS_NO_AGENT_BUS;
 
 const CLEAR_MODS = [
   '../lib/config', '../lib/agentBus/storeCore',
-  '../lib/agentBus/store', '../lib/agentBus/storeTasks', '../lib/agentBus/storeIdentity',
+  '../lib/agentBus/store', '../lib/agentBus/storeIdentity',
   '../lib/agentBus/registry', '../lib/agentBus/handlers',
   '../lib/agentBus/handlersDag',
   '../lib/agentBus/dagStore', '../lib/agentBus/dagEngine',

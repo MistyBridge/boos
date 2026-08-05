@@ -23,9 +23,10 @@ function register(app, { asyncH, webTerminal, pkg, gracefulShutdown, openInBrows
   }));
 
   // ---- health ----
+  // Sprint 38: shutdownToken removed — was leaking to agents via /api/health.
+  // Token stays server-side only; /api/shutdown and /api/upgrade still require it.
   app.get('/api/health', (_req, res) => res.json({
     ok: true, pid: process.pid, version: pkg.version, name: pkg.name,
-    shutdownToken,
   }));
 
   // ---- runtime discovery ----

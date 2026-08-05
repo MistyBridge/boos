@@ -78,6 +78,8 @@ function register(app, { asyncH, persistedSessions, webTerminal, folders, loadCo
   }));
 
   // ---- stop ----
+  // Sprint 38: token removed — frontend boosConfirm dialog is the protection.
+  // Agents cannot interact with browser UI. kill_worker MCP is root-only.
   app.post('/api/sessions/:id/stop', asyncH(async (req, res) => {
     const record = await persistedSessions.get(req.params.id);
     if (!record) return res.status(404).json({ error: 'session not found' });
@@ -91,6 +93,7 @@ function register(app, { asyncH, persistedSessions, webTerminal, folders, loadCo
   }));
 
   // ---- delete ----
+  // Sprint 38: token removed — frontend boosConfirm dialog is the protection.
   app.delete('/api/sessions/:id', asyncH(async (req, res) => {
     try { webTerminal.kill(req.params.id); } catch {}
     const removed = await persistedSessions.remove(req.params.id);

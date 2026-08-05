@@ -19,7 +19,7 @@ const origNoAgentBus = process.env.BOOS_NO_AGENT_BUS;
 
 const CLEAR_MODS = [
   '../lib/config', '../lib/agentBus/storeCore',
-  '../lib/agentBus/store', '../lib/agentBus/storeTasks', '../lib/agentBus/storeIdentity',
+  '../lib/agentBus/store', '../lib/agentBus/storeIdentity',
   '../lib/agentBus/queue', '../lib/agentBus/registry',
   '../lib/agentBus/handlers', '../lib/agentBus/handlersAdmin',
   '../lib/agentBus/handlersDag', '../lib/agentBus/handlersSession',
@@ -1125,7 +1125,7 @@ describe('Task Operations', () => {
       await store.insertTask(t1);
       await store.insertTask(t2);
       await store.insertTask(t3);
-      const tasks = store.listAllTasksInWorkspace('boos');
+      const tasks = await store.listAllTasksInWorkspace('boos');
       assert.strictEqual(tasks.length, 2);
     });
   });

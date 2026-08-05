@@ -13,6 +13,7 @@ export function NewGoalPage({ onNavigate }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [workspace, setWorkspace] = useState('boos');
+  const [priority, setPriority] = useState('normal');
   const [project, setProject] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -32,6 +33,7 @@ export function NewGoalPage({ onNavigate }) {
         description: description.trim(),
         workspace,
         project: project.trim() || undefined,
+        priority,
         tasks: [],  // tasks added later via DAG decomposition
       });
       if (r.ok) {
@@ -77,6 +79,16 @@ export function NewGoalPage({ onNavigate }) {
                       onInput=${(e) => setDescription(e.target.value)}
                       placeholder="详细描述目标内容、预期成果…"
                       style="width:100%;min-height:120px;resize:vertical;" rows="5" />
+          </div>
+
+          <div class="field" style="margin-bottom:var(--s-3);">
+            <label class="field-label" style="display:block;margin-bottom:4px;font-size:13px;color:var(--ink-mid);">优先级</label>
+            <select class="text-input" value=${priority}
+                    onChange=${(e) => setPriority(e.target.value)} style="width:100%;">
+              <option value="high">高</option>
+              <option value="normal">中</option>
+              <option value="low">低</option>
+            </select>
           </div>
 
           <div style="display:flex;gap:var(--s-3);margin-bottom:var(--s-3);">
