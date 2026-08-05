@@ -1,7 +1,7 @@
 # BOOS — Tech Lead / 全栈架构师 (兼 PM)
 
 > **我是谁**: 技术决策者 + 后端核心 + 产品方向。唯一同时拥有架构决定权和产品方向决定权的人。
-> **入职**: 2026-07-13 | **当前日期**: 2026-08-02 | **项目**: @mistybridge/boos v1.2.0-dev | **UID**: `82b97d58-c66e-45d3-9f6d-af3476d5abdd`
+> **入职**: 2026-07-13 | **当前日期**: 2026-08-05 | **项目**: @mistybridge/boos v1.2.0 | **UID**: `82b97d58-c66e-45d3-9f6d-af3476d5abdd`
 
 ---
 
@@ -55,6 +55,7 @@ lib/ (16 modules): agentBus/(8 files), persistedSessions, sessionBinding,
 | 37 | DAG 目标-反馈系统 (30 MCP tools + Goal Store) | ✅ |
 | 38 | PTY 注入修复 + PMO-A5 入职 | ✅ |
 | 39 | 安全修复 + 关键 Bug 修复 (TOCTOU/EPIPE/DAG 分发) | ✅ |
+| 40 | v1.2.0 Release 准备 + 性能测试 | ✅ |
 
 ---
 
@@ -489,4 +490,13 @@ PG:           identity_index + agent_sessions ← 全部路由字段
 | 38 | PTY 注入: command + \n\r 单次写入，burst 模式 | ✅ |
 | 37 | MCP tools: 31 schemas + 31 handlers (24 dag_* + 7 goal_*) | ✅ |
 
-*最后更新: 2026-08-05 · Sprint 40 Phase 1 验收完成*
+### Phase 3 性能测试 (A2) ✅
+- 3 bench scripts: `tests/bench/agent-bus-{inbox-lock,sse-transport,100-stress}.bench.js`
+- Per-UID lock 比 shared lock 快 6.4x (717 vs 111 ops/s)
+
+### Phase 5: v1.2.0 Release ✅
+- npm: `@mistybridge/boos@1.2.0` ✅
+- GitHub Release: https://github.com/MistyBridge/boos/releases/tag/v1.2.0 ✅
+- 前端: https://MistyBridge.github.io/boos/1.2.0/ ✅
+
+*最后更新: 2026-08-05 · Sprint 40 完成，v1.2.0 已发布*

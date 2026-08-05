@@ -21,6 +21,7 @@ that folder when you click it again.
 │   ├── /api/sessions  /api/sessions/new   │
 │   ├── /api/sessions/:id/resume     │
 │   ├── /api/version  /api/upgrade   │
+│   ├── /mcp/sse  /mcp/message       │  ← Agent-Bus MCP
 │   ├── /ws/terminal/:id (PTY)       │
 │   └── /api/health  /api/heartbeat  │
 └────────────────────────────────────┘
@@ -44,6 +45,27 @@ that folder when you click it again.
 - **Folders.** Drag sessions into named folders for organisation.
 - **In-app upgrade.** About page checks npm for newer versions of
   boos and offers a one-click upgrade button. Backend self-restarts.
+
+## Multi-Agent Collaboration (Agent-Bus)
+
+Beyond session management, boos embeds a **multi-agent collaboration
+platform** — an MCP-compatible agent bus with SSE transport, task
+queue, and DAG-based goal decomposition. Run multiple Claude agents
+in your sessions and coordinate them through structured tasks.
+
+- **Agent-Bus**: Register agents, send tasks, respond with results.
+  Event-driven (SSE + auto-wake), zero polling.
+- **DAG Goal System**: Create high-level goals, decompose into task
+  graphs with dependencies, auto-dispatch to capable agents.
+- **30+ MCP tools**: `goal_create`, `dag_activate`, `send_task`,
+  `check_inbox`, `respond_task`, `wake_agent`, and more.
+- **Workflow engine**: Define multi-stage workflows with
+  topological sort, cycle detection, capability-based dispatch.
+- **Decision system**: MD file-based decisions with REST API,
+  approval workflows, and Feishu webhook integration.
+
+See [Sprint 37 design doc](docs/Sprint-37-DAG-Goal-System.md) for
+the DAG goal system architecture.
 
 ## Install
 
@@ -109,6 +131,15 @@ boos/
 │   ├── folders.js            # sidebar tree
 │   ├── workspace.js          # ws-N allocation + repo clones
 │   ├── webTerminal.js        # node-pty pool · WebSocket bridge
+│   ├── agentBus/             # embedded multi-agent platform (8 files)
+│   │   ├── transport.js      # SSE + JSON-RPC 2.0 transport layer
+│   │   ├── handlers.js       # 26 MCP tool handlers
+│   │   ├── schemasDag.js     # DAG/goal MCP tool schemas
+│   │   ├── handlersDag.js    # DAG/goal MCP tool handlers
+│   │   ├── dagStore.js       # DAG data layer
+│   │   ├── dagEngine.js      # DAG execution engine
+│   │   ├── goalStore.js      # Goal CRUD + state management
+│   │   └── ...               # queue, registry, store, notifications
 │   ├── jsonStore.js · config.js
 ├── pages-root/               # → GH Pages /  (version router)
 └── public/                   # → GH Pages /<pkg.version>/  (per-version frontend)
