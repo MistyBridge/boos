@@ -320,6 +320,7 @@ require('./routes/version').register(app, {
 // ---- decisions + goals ----
 require('./routes/decisions').register(app, { asyncH });
 require('./routes/goals').register(app, { asyncH });   // Sprint 24: AutoPilot goals
+require('./routes/usage').register(app, { asyncH, persistedSessions });  // Sprint 41: token + cache telemetry
 require('./routes/hr').register(app, { hrAgent: require('./lib/hrAgent') });
 require('./routes/archive').register(app, { asyncH });        // Sprint 9: archive system
 require('./routes/agents').register(app, { asyncH });        // Sprint 9: agent-bus ↔ canvas bridge
