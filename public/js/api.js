@@ -841,3 +841,10 @@ export async function fetchSettlementNotifications(workspace = 'boos') {
 export async function settleTask(taskId, action, feedback) {
   return api('POST', `/api/agent-bus/tasks/${encodeURIComponent(taskId)}/settle`, { action, feedback: feedback || '' });
 }
+
+// ── Sprint 41: Token usage + cache telemetry ──────────────────────
+
+/** Fetch workspace + per-session token usage and cache hit rates. → GET /api/usage */
+export async function fetchUsage() {
+  return api('GET', '/api/usage');
+}

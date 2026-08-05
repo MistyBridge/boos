@@ -22,6 +22,7 @@ import { AboutPage } from '../pages/AboutPage.js';
 import { DecisionPage } from '../pages/DecisionPage.js';
 import { GoalRouterPage } from '../pages/GoalRouterPage.js';
 import { DashboardPage } from '../pages/DashboardPage.js';
+import { UsagePage } from '../pages/UsagePage.js';
 import { GoalNotification } from './GoalNotification.js';
 
 function Panel({ name, children }) {
@@ -143,6 +144,7 @@ export function App() {
           ${tab === 'decisions' ? html`<${Panel} name="decisions"><${DecisionPage} /></${Panel}>` : null}
           ${tab === 'goals'     ? html`<${Panel} name="goals"><${GoalRouterPage} /></${Panel}>` : null}
           ${tab === 'dashboard' ? html`<${Panel} name="dashboard"><${DashboardPage} /></${Panel}>` : null}
+          ${tab === 'usage'     ? html`<${Panel} name="usage"><${UsagePage}     /></${Panel}>` : null}
         </div>
       </main>
       <${Toast} />
