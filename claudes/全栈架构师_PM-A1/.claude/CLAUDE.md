@@ -52,7 +52,9 @@ lib/ (16 modules): agentBus/(8 files), persistedSessions, sessionBinding,
 | 26 | 前端架构稳定化调研 | ✅ |
 | 27 | 前端稳定性加固 P0 (ErrorBoundary等) | ✅ |
 | 36 | 统一权限 + 文件锁FIFO + inbox/archive分区 | ✅ |
-| **37** | **DAG 目标-反馈系统 (30 MCP tools + Goal Store)** | **🔄 后端完成** |
+| 37 | DAG 目标-反馈系统 (30 MCP tools + Goal Store) | ✅ |
+| 38 | PTY 注入修复 + PMO-A5 入职 | ✅ |
+| 39 | 安全修复 + 关键 Bug 修复 (TOCTOU/EPIPE/DAG 分发) | ✅ |
 
 ---
 
@@ -448,3 +450,43 @@ PG:           identity_index + agent_sessions ← 全部路由字段
 - UID: `f21556fd-a69b-47d0-b6c6-8da9e0a9921d`
 - 角色: pmo, workspace: boos
 - 职责: 升级事件响应 + PM 故障备援
+
+---
+
+## Sprint 39: 安全修复 + 关键 Bug 修复 (2026-08-05)
+
+| 变更 | 内容 | 状态 |
+|------|------|:--:|
+| 安全修复 | /api/health 移除 shutdownToken 泄漏 | ✅ |
+| 权限修复 | routes/sessions.js 移除 token 保护（依赖浏览器 boosConfirm） | ✅ |
+| EPIPE 崩溃 | lib/webTerminal.js PTY write 添加 error handler + try-catch | ✅ |
+| DAG 分发 | handlersDag.js: dag_activate 后向 executor 发送 inbox 任务 + wake | ✅ |
+| SSE 通知 | notifications.js: wire dagEngine.setNotify() 推送 DAG 事件 | ✅ |
+| TOCTOU 竞态 | inboxStore.js: 所有写操作添加 per-uid file lock (withFileLock) | ✅ |
+| 代码重构 | store.js +418 行（storeTasks.js 合并） | ✅ |
+| 前端更新 | 4 个组件（DagStatusPanel, GoalNotification, DashboardPage, NewGoalPage） | ✅ |
+| 测试更新 | 5 个测试文件同步更新 | ✅ |
+| Agent 配置 | 7 个 settings.json 统一配置 | ✅ |
+
+**提交**: `a96f154` — 27 files changed, +661 -433
+
+*最后更新: 2026-08-05 · Sprint 39 完成，代码已推送 GitHub*
+
+---
+
+## Sprint 40: v1.2.0 Release 准备 (2026-08-05)
+
+> **规划文档**: `docs/Sprint-40-Release-Preparation.md`
+
+### Phase 1 验收 (代码审查) ✅
+
+| Sprint | 验收项 | 状态 |
+|--------|--------|:--:|
+| 39 | 安全修复: /api/health 不返回 shutdownToken | ✅ |
+| 39 | TOCTOU 修复: inboxStore 所有写操作使用 _withInboxLock | ✅ |
+| 39 | EPIPE 修复: proc.on('error') + try-catch 包裹 pty.write | ✅ |
+| 39 | DAG 分发: _dagActivate/_dagApproveTask 向 executor 发送任务+ wake | ✅ |
+| 38 | PTY 注入: command + \n\r 单次写入，burst 模式 | ✅ |
+| 37 | MCP tools: 31 schemas + 31 handlers (24 dag_* + 7 goal_*) | ✅ |
+
+*最后更新: 2026-08-05 · Sprint 40 Phase 1 验收完成*

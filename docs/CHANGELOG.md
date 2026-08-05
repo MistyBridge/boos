@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.2.0 (2026-08-05)
+
+DAG 目标系统 + PTY 注入修复 + 安全加固。
+
+### DAG 目标-反馈系统 (Sprint 37)
+- **30+ MCP tools**: goal_create/list/status/update/archive/start/pause + dag_create/add_task/activate/status/cancel/submit/approve/reject/my_tasks/reassign/list/sleep_agent/wake_agent
+- **Goal Store**: `lib/agentBus/goalStore.js` (280 lines) — 目标 CRUD + 状态管理
+- **Feedback Manager**: `lib/agentBus/feedbackManager.js` (160 lines) — PM 反馈收集 + 通知
+- **DAG Decomposer**: `lib/agentBus/dagDecomposer.js` (548 lines) — 目标批量拆分为 DAG 任务图
+- **16 MCP Schemas + Handlers**: `schemasDag.js` + `handlersDag.js` — 完整 DAG 操作 API
+
+### PTY 注入修复 (Sprint 38)
+- **单阶段注入**: 从两阶段 (text → delay → \r) 改为单次 `command + \n\r` 写入
+- **Bracketed-paste 废弃**: Ink TUI 不支持 bracketed-paste 模式
+- **启动加速**: 3 agent 注册并行化 + auto-supervisor 延迟启动
+- **Auto-mode**: managed agents 自动 `--permission-mode bypassPermissions`
+- **去硬编码**: capability→role-name 从 hrAgent BUILTIN_ROLES 推导
+
+### 安全修复 + 关键 Bug 修复 (Sprint 39)
+- **shutdownToken 泄漏**: `/api/health` 不再返回 shutdownToken，仅服务端使用
+- **TOCTOU 竞态**: `inboxStore.js` 所有写操作添加 per-uid file lock (`withFileLock`)
+- **EPIPE 崩溃**: `webTerminal.js` PTY write 添加 error handler + try-catch
+- **DAG 分发**: `dag_activate` 后向 executor 发送 inbox 任务 + PTY wake
+- **SSE 通知**: `dagEngine.setNotify()` 推送 DAG 事件到前端
+- **代码重构**: `store.js` +418 行（`storeTasks.js` 合并）
+
+### 前端更新
+- **4 组件**: DagStatusPanel, GoalNotification, DashboardPage, NewGoalPage
+- **测试**: 5 个测试文件同步更新
+
+---
+
 ## 1.1.0 (2026-07-19)
 
 Agent-Bus 全栈事件驱动平台 + Sandbox + HR Agent + 原子性锁。
