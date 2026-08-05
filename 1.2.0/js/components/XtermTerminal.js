@@ -1,0 +1,373 @@
+// VS Code-style xterm wrapper. Owns the raw xterm.js terminal, renderer
+// addons, theme application, and fit/refresh behavior. It intentionally does
+// not know about boos sessions or WebSockets.
+//
+// Sprint 29: WebGL renderer replaced with CanvasRenderer (default). The WebGL
+// texture atlas caused visible glyph corruption ("花屏") on Windows when the
+// GPU let textures decay during idle periods. CanvasRenderer has no atlas —
+// each frame is a fresh raster, no corruption possible. Performance for PTY
+// terminal dimensions (≤200×50) is indistinguishable from WebGL.
+
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { ClipboardAddon } from '@xterm/addon-clipboard';
+import { SerializeAddon } from '@xterm/addon-serialize';
+import { isDarkTheme } from '../state.js';
+
+const DEFAULT_COLS = 80;
+const DEFAULT_ROWS = 24;
+const SCROLLBAR_WIDTH_FALLBACK = 14;
+
+// Dark xterm theme — BOOS Muted Dark palette. Muted, warm tones that sit
+// comfortably on dark canvas without visual glare. Bright variants lift
+// luminance ~15-20% without increasing saturation.
+const THEME_DARK = {
+  background: '#1a1b1e',
+  foreground: '#c8c3b8',
+  cursor:     '#aeafad',
+  cursorAccent: '#1a1b1e',
+  selectionBackground: '#3a5068',
+  black:   '#1a1b1e', brightBlack:   '#4a4d52',
+  red:     '#c26b6b', brightRed:     '#d49595',
+  green:   '#6b9b6b', brightGreen:   '#8ab88a',
+  yellow:  '#b8a86b', brightYellow:  '#d4c48a',
+  blue:    '#6b8aad', brightBlue:    '#8aa8c4',
+  magenta: '#9b7b9b', brightMagenta: '#b89ab8',
+  cyan:    '#6b9b9b', brightCyan:    '#8ab8b8',
+  white:   '#b0ada5', brightWhite:   '#d8d5cd',
+};
+
+// Light xterm theme - VSCode's Light+ terminal palette, verbatim (see
+// microsoft/vscode src/.../terminal/common/terminalColorRegistry.ts).
+const THEME_LIGHT = {
+  background: '#ffffff',
+  foreground: '#333333',
+  cursor:     '#000000',
+  cursorAccent: '#ffffff',
+  selectionBackground: '#add6ff',
+  black:   '#000000', brightBlack:   '#666666',
+  red:     '#cd3131', brightRed:     '#cd3131',
+  green:   '#107c10', brightGreen:   '#14ce14',
+  yellow:  '#949800', brightYellow:  '#b5ba00',
+  blue:    '#0451a5', brightBlue:    '#0451a5',
+  magenta: '#bc05bc', brightMagenta: '#bc05bc',
+  cyan:    '#0598bc', brightCyan:    '#0598bc',
+  white:   '#555555', brightWhite:   '#a5a5a5',
+};
+
+export const themeFor = (dark) => (dark ? THEME_DARK : THEME_LIGHT);
+
+let lastKnownGridDimensions = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
+
+export class XtermTerminal {
+  constructor() {
+    this.isMobile = window.matchMedia('(max-width: 640px)').matches;
+    this.currentTheme = themeFor(isDarkTheme());
+    this.fitAddon = new FitAddon();
+    this.serializeAddon = new SerializeAddon();
+    this.refreshDimensionListeners = new Set();
+    this.resizeScrollState = null;
+    this.resizeScrollStateTimer = null;
+    this.host = null;
+
+    this.raw = new Terminal({
+      fontFamily: '"Cascadia Mono", "Geist Mono", "JetBrains Mono", Consolas, monospace',
+      fontSize: this.isMobile ? 11 : 13,
+      lineHeight: 1.2,
+      cols: lastKnownGridDimensions.cols,
+      rows: lastKnownGridDimensions.rows,
+      cursorBlink: true,
+      cursorStyle: 'bar',
+      scrollback: 2000,    // Caps reflow cost on resize
+      allowProposedApi: true,
+      theme: this.currentTheme,
+      // Same modern keyboard protocols VS Code enables when configured.
+      vtExtensions: {
+        kittyKeyboard: true,
+        win32InputMode: true,
+      },
+    });
+
+    this.raw.loadAddon(this.fitAddon);
+    this.raw.loadAddon(new WebLinksAddon());
+    this.raw.loadAddon(new ClipboardAddon());
+    this.raw.loadAddon(this.serializeAddon);
+    this._installSelectionCopyGuard();
+  }
+
+  get cols() { return this.raw.cols; }
+  get rows() { return this.raw.rows; }
+  get normalBufferLength() { return this.raw.buffer?.normal?.length ?? 0; }
+  get theme() { return this.currentTheme; }
+  get parser() { return this.raw.parser; }
+  get helperTextarea() {
+    return this.host?.querySelector('.xterm-helper-textarea') || null;
+  }
+
+  attachToElement(host) {
+    this.host = host;
+    this.raw.open(host);
+    host.xterm = this.raw;
+    try {
+      document.fonts?.ready?.then(() => {
+        if (this.host === host) this._fireRequestRefreshDimensions();
+      });
+    } catch {}
+  }
+
+  /** Serialize terminal state for reconnection without xterm.reset(). */
+  serializeState() {
+    try { return this.serializeAddon.serialize(); } catch { return null; }
+  }
+
+  /** Restore serialized terminal state after reconnection. */
+  deserializeState(state) {
+    if (!state) return;
+    try { this.serializeAddon.deserialize(state); } catch {}
+  }
+
+  onDidRequestRefreshDimensions(listener) {
+    this.refreshDimensionListeners.add(listener);
+    return {
+      dispose: () => this.refreshDimensionListeners.delete(listener),
+    };
+  }
+
+  applyResolvedTheme() {
+    const theme = themeFor(isDarkTheme());
+    this.currentTheme = theme;
+    try { this.raw.options.theme = theme; } catch {}
+    return theme;
+  }
+
+  setCursorVisible(visible) {
+    if (visible) {
+      try { this.raw.options.theme = this.currentTheme; } catch {}
+      try { this.raw.write('\x1b[?25h'); } catch {}
+      return;
+    }
+    try {
+      this.raw.options.theme = {
+        ...this.currentTheme,
+        cursor: 'transparent',
+        cursorAccent: 'transparent',
+      };
+    } catch {}
+    try { this.raw.write('\x1b[?25l'); } catch {}
+  }
+
+  layoutFromElement() {
+    if (!this.host) return null;
+    const rect = this.host.getBoundingClientRect();
+    return this.layout(rect.width, rect.height);
+  }
+
+  layout(width, height) {
+    if (!(width > 0 && height > 0)) return null;
+
+    const proposed = this._proposeDimensions(width, height);
+    if (!proposed) return null;
+
+    if (proposed.cols !== this.raw.cols || proposed.rows !== this.raw.rows) {
+      this._resizeRaw(proposed.cols, proposed.rows);
+    }
+    lastKnownGridDimensions = proposed;
+    return proposed;
+  }
+
+  proposeDimensions(width, height) {
+    return this._proposeDimensions(width, height);
+  }
+
+  resize(cols, rows) {
+    if (!(cols > 0 && rows > 0)) return;
+    this._resizeRaw(cols, rows);
+    lastKnownGridDimensions = { cols: this.raw.cols, rows: this.raw.rows };
+  }
+
+  fit() {
+    try { this.fitAddon.fit(); } catch {}
+  }
+
+  refresh() {
+    try { this.raw.refresh(0, this.raw.rows - 1); } catch {}
+  }
+
+  write(data, callback) {
+    try { this.raw.write(data, callback); } catch { callback?.(); }
+  }
+
+  reset() {
+    try { this.raw.reset(); } catch {}
+  }
+
+  focus() {
+    try { this.raw.focus(); } catch {}
+  }
+
+  blur() {
+    try {
+      if (this.helperTextarea && document.activeElement === this.helperTextarea) {
+        this.helperTextarea.blur();
+      }
+    } catch {}
+  }
+
+  onData(listener) {
+    return this.raw.onData(listener);
+  }
+
+  onResize(listener) {
+    return this.raw.onResize(listener);
+  }
+
+  hasSelection() {
+    return this.raw.hasSelection();
+  }
+
+  dispose() {
+    if (this.resizeScrollStateTimer) clearTimeout(this.resizeScrollStateTimer);
+    this.resizeScrollState = null;
+    this.resizeScrollStateTimer = null;
+    if (this.host?.xterm === this.raw) {
+      try { delete this.host.xterm; } catch { this.host.xterm = undefined; }
+    }
+    this.host = null;
+    this.refreshDimensionListeners.clear();
+    try { this.raw.dispose(); } catch {}
+  }
+
+  _fireRequestRefreshDimensions() {
+    for (const listener of this.refreshDimensionListeners) {
+      try { listener(); } catch {}
+    }
+  }
+
+  _resizeRaw(cols, rows) {
+    const scrollState = this._scrollStateForResize();
+    try { this.raw.resize(cols, rows); } catch {}
+    // Single rAF restore — the old 0ms/150ms/350ms chain could fire
+    // scrollToLine mid-render while AI output was streaming, causing
+    // visible tear lines. One attempt in the next frame is enough.
+    requestAnimationFrame(() => this._restoreScrollStateIfNeeded(scrollState));
+  }
+
+  _scrollStateForResize() {
+    const state = this._captureScrollState();
+    if (state?.viewportY > 0) {
+      this._rememberResizeScrollState(state);
+      return state;
+    }
+    return this.resizeScrollState;
+  }
+
+  _rememberResizeScrollState(state) {
+    this.resizeScrollState = state;
+    if (this.resizeScrollStateTimer) clearTimeout(this.resizeScrollStateTimer);
+    this.resizeScrollStateTimer = setTimeout(() => {
+      this.resizeScrollState = null;
+      this.resizeScrollStateTimer = null;
+    }, 500);
+  }
+
+  _captureScrollState() {
+    const buffer = this.raw?.buffer?.active;
+    if (!buffer) return null;
+    return {
+      viewportY: buffer.viewportY,
+      baseY: buffer.baseY,
+      atBottom: buffer.viewportY >= buffer.baseY,
+    };
+  }
+
+  _restoreScrollStateIfNeeded(state) {
+    if (!state || !(state.viewportY > 0)) return;
+    const buffer = this.raw?.buffer?.active;
+    if (!buffer) return;
+
+    if (state.atBottom) {
+      if (buffer.viewportY < buffer.baseY) {
+        try { this.raw.scrollToBottom(); } catch {}
+      }
+      return;
+    }
+
+    const target = Math.min(state.viewportY, buffer.baseY);
+    if (target > 0 && buffer.viewportY !== target) {
+      try { this.raw.scrollToLine(target); } catch {}
+    }
+  }
+
+  _installSelectionCopyGuard() {
+    this.raw.attachCustomKeyEventHandler((ev) => {
+      if (ev.type === 'keydown'
+          && ev.ctrlKey && !ev.shiftKey && !ev.altKey && !ev.metaKey
+          && ev.key.toLowerCase() === 'c'
+          && this.raw.hasSelection()) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  _proposeDimensions(width, height) {
+    const cell = this._cellDimensions();
+    if (!cell) return null;
+
+    const elementStyle = this.raw.element
+      ? window.getComputedStyle(this.raw.element)
+      : null;
+    const px = (v) => Number.parseFloat(v || '0') || 0;
+    const horizontalPadding = elementStyle
+      ? px(elementStyle.paddingLeft) + px(elementStyle.paddingRight)
+      : 0;
+    const verticalPadding = elementStyle
+      ? px(elementStyle.paddingTop) + px(elementStyle.paddingBottom)
+      : 0;
+    const scrollbarWidth = this._scrollbarWidth();
+
+    const availableWidth = Math.max(0, width - horizontalPadding - scrollbarWidth);
+    const availableHeight = Math.max(0, height - verticalPadding);
+    if (!(availableWidth > 0 && availableHeight > 0)) return null;
+
+    const dpr = window.devicePixelRatio || 1;
+    const scaledWidth = availableWidth * dpr;
+    const scaledCellWidth = cell.width * dpr;
+    const scaledHeight = availableHeight * dpr;
+    const scaledCellHeight = Math.ceil(cell.height * dpr);
+
+    return {
+      cols: Math.max(1, Math.floor(scaledWidth / scaledCellWidth)),
+      rows: Math.max(1, Math.floor(scaledHeight / scaledCellHeight)),
+    };
+  }
+
+  _cellDimensions() {
+    const cell = this.raw?._core?._renderService?.dimensions?.css?.cell;
+    if (cell?.width > 0 && cell?.height > 0) {
+      return { width: cell.width, height: cell.height };
+    }
+
+    const proposed = (() => {
+      try { return this.fitAddon.proposeDimensions?.(); } catch { return null; }
+    })();
+    if (proposed?.cols > 0 && proposed?.rows > 0 && this.host) {
+      const rect = this.host.getBoundingClientRect();
+      return {
+        width: rect.width / proposed.cols,
+        height: rect.height / proposed.rows,
+      };
+    }
+    return null;
+  }
+
+  _scrollbarWidth() {
+    const core = this.raw?._core;
+    const width =
+      core?._viewport?.scrollBarWidth ??
+      core?.viewport?.scrollBarWidth ??
+      0;
+    return width > 0 ? width : SCROLLBAR_WIDTH_FALLBACK;
+  }
+}
