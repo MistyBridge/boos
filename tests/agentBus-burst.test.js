@@ -36,13 +36,16 @@ describe('agentBus 50 burst load test (#82)', () => {
     const BURST = 50;
 
     // Register sender and receiver.
+    // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
     const sender = await registry.registerAgent({
       name: 'burst-sender', intro: 'load test',
       workspace: 'boos', role: 'supervisor', capabilities: ['test'],
+      cliSessionId: 'burst-sender-uid',
     });
     const receiver = await registry.registerAgent({
       name: 'burst-receiver', intro: 'load test',
       workspace: 'boos', role: 'worker', capabilities: ['test'],
+      cliSessionId: 'burst-receiver-uid',
     });
 
     // ── Burst send ──────────────────────────────────────────────
@@ -151,9 +154,11 @@ describe('#82-c: 50 agents × 10 concurrent tasks (500 burst)', () => {
     const TOTAL = AGENTS * TASKS_PER;
 
     // Register receiver.
+    // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
     const receiver = await registry.registerAgent({
       name: 'burst500-recv', intro: '', workspace: 'boos-burst500',
       role: 'worker', capabilities: ['burst'],
+      cliSessionId: 'burst500-recv-uid',
     });
 
     // Register 50 senders.
@@ -162,6 +167,7 @@ describe('#82-c: 50 agents × 10 concurrent tasks (500 burst)', () => {
       const s = await registry.registerAgent({
         name: 'burst500-snd-' + i, intro: '', workspace: 'boos-burst500',
         role: 'worker', capabilities: ['burst'],
+        cliSessionId: 'burst500-snd-' + i,
       });
       senders.push(s);
     }
@@ -254,15 +260,18 @@ describe('#82-d: data integrity under concurrent operations', () => {
     const PAIRS = 20;
 
     // Register 20 sender-receiver pairs.
+    // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
     const pairs = [];
     for (let i = 0; i < PAIRS; i++) {
       const snd = await registry.registerAgent({
         name: 'int-snd-' + i, intro: '', workspace: 'boos-burst-int',
         role: 'worker', capabilities: ['burst'],
+        cliSessionId: 'int-snd-' + i,
       });
       const rcv = await registry.registerAgent({
         name: 'int-rcv-' + i, intro: '', workspace: 'boos-burst-int',
         role: 'worker', capabilities: ['burst'],
+        cliSessionId: 'int-rcv-' + i,
       });
       pairs.push({ sender: snd, receiver: rcv });
     }
@@ -295,11 +304,14 @@ describe('#82-d: data integrity under concurrent operations', () => {
     assert.ok(allOk, 'all concurrent respondTask should succeed');
 
     // Verify each task status is completed with correct result.
+    // Sprint 35: completed tasks are archived (out of the active inbox), so
+    // query the archive rather than getTask (active inbox only).
     for (const { id, receiver } of taskIds) {
-      const t = store.getTask(id);
+      const t = await queue.getArchivedTask(id);
+      assert.ok(t, 'task ' + id + ' should be archived');
       assert.equal(t.status, 'completed', 'task ' + id + ' should be completed');
-      assert.ok(t.result.includes(receiver.name),
-        'result should contain receiver name, got: ' + t.result);
+      assert.ok(t.result && t.result.includes(receiver.name),
+        'result should contain receiver name, got: ' + (t && t.result));
     }
 
     // Cleanup.
@@ -321,13 +333,16 @@ describe('#121: FIFO ordering under burst', () => {
     const queue = require('../lib/agentBus/queue');
     const store = require('../lib/agentBus/store');
 
+    // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
     const sender = await registry.registerAgent({
       name: 'fifo-sender', intro: '', workspace: 'boos-fifo',
       role: 'supervisor', capabilities: ['test'],
+      cliSessionId: 'fifo-sender-uid',
     });
     const receiver = await registry.registerAgent({
       name: 'fifo-receiver', intro: '', workspace: 'boos-fifo',
       role: 'worker', capabilities: ['test'],
+      cliSessionId: 'fifo-receiver-uid',
     });
 
     const COUNT = 50;
@@ -369,13 +384,21 @@ describe('#121: FIFO ordering under burst', () => {
       'should have 0 pending after all claims, got ' + pendingAfter.length);
 
     // Batch respond all.
+    // Sprint 37: worker → supervisor responses enter "submitted" (awaiting
+    // PM settlement), so the supervisor approves each to reach completed.
     for (const tid of sentIds) {
-      await queue.respondTask(tid, receiver.uid, 'FIFO done');
+      const resp = await queue.respondTask(tid, receiver.uid, 'FIFO done');
+      assert.ok(resp.ok, 'respond ' + tid + ' should succeed');
+      if (resp.needs_settlement) {
+        const settle = await queue.settleTask(tid, sender.uid, 'approve');
+        assert.ok(settle.ok, 'settle ' + tid + ' should succeed');
+      }
     }
 
-    // Verify all completed.
+    // Verify all completed (archived).
     for (const tid of sentIds) {
-      const t = store.getTask(tid);
+      const t = await queue.getArchivedTask(tid);
+      assert.ok(t, 'task ' + tid + ' should be archived');
       assert.equal(t.status, 'completed', 'task ' + tid + ' should be completed');
     }
 

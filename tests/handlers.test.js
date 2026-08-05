@@ -20,6 +20,9 @@ let tmpBase;
 const CLEAR_MODS = [
   '../lib/config', '../lib/agentBus/storeCore',
   '../lib/agentBus/store', '../lib/agentBus/storeIdentity',
+  // Sprint 41 Phase 3: store split into storeAgents/storeTasks/storeIdentity —
+  // these capture store.DB_PATH at module load, so clear them with store.
+  '../lib/agentBus/storeAgents', '../lib/agentBus/storeTasks',
   '../lib/agentBus/queue', '../lib/agentBus/registry',
   '../lib/agentBus/handlers', '../lib/agentBus/handlersAdmin',
   '../lib/agentBus/handlersDag', '../lib/agentBus/handlersSession',
