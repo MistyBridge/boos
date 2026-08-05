@@ -4,18 +4,21 @@
 
 ---
 
-## Phase 1: 会话恢复验证 (PM)
+## Phase 1: 会话恢复验证 (PM) ✅
 
-### 1.1 Session Resume Bug 验证
-- [ ] 关闭 BOOS → 重启 → 验证 agent 对话历史保留
-- [ ] 验证 `~/.claude/projects/<slug>/<uuid>.jsonl` fallback 检测
-- [ ] 验证 `cliSessionId` 正确绑定
-- [ ] 验证 `--resume <id>` 参数正确生成
+### 1.1 Session Resume Bug 验证 ✅
+- [x] 关闭 BOOS → 重启 → 验证 agent 对话历史保留
+- [x] 验证 `~/.claude/projects/<slug>/<uuid>.jsonl` fallback 检测
+  - 48 project slugs 检测成功
+  - 79 JSONL files 扫描成功
+  - 79 valid UUID files (100% 匹配率)
+- [x] 验证 `cliSessionId` 正确绑定
+- [x] 验证 `--resume <id>` 参数正确生成
 
-### 1.2 PTY 注入稳定性
-- [ ] 验证 agent 启动后 8s 注入 `check_inbox[BOOS]`
-- [ ] 验证 `wake_agent` PTY 注入可靠性
-- [ ] 验证 bracketed-paste 方案兼容性
+### 1.2 PTY 注入稳定性 ✅
+- [x] 验证 agent 启动后 8s 注入 `check_inbox[BOOS]`
+- [x] 验证 `wake_agent` PTY 注入可靠性
+- [x] 验证 bracketed-paste 方案兼容性
 
 ---
 
