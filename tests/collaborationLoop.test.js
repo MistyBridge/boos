@@ -34,13 +34,16 @@ async function setup(registerCount) {
 
   const agents = [];
   for (let i = 0; i < (registerCount || 3); i++) {
+    // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
     const r = await registry.registerAgent({
       name: 'Agent-' + i,
       intro: 'Test agent',
       workspace: 'boos',
       role: 'worker',
       capabilities: ['testing'],
+      cliSessionId: 'cloop-agent-' + i,
     });
+    if (!r.ok) throw new Error('registerAgent failed: ' + JSON.stringify(r));
     agents.push(r);
   }
   return { cl, registry, store, agents };
@@ -51,22 +54,23 @@ async function setup(registerCount) {
 describe('collaborationLoop — state tracking (#74)', () => {
   test('getAgentState returns idle for new agent', async () => {
     const { cl, agents } = await setup(1);
-    const state = cl.getAgentState(agents[0].uid);
+    // getAgentState is async (derives state from inbox tasks).
+    const state = await cl.getAgentState(agents[0].uid);
     assert.equal(state.state, 'idle');
     assert.equal(state.taskCount, 0);
   });
 
   test('collaborationStatus returns ready_for_work', async () => {
     const { cl, agents } = await setup(1);
-    const status = cl.collaborationStatus(agents[0].uid);
+    const status = await cl.collaborationStatus(agents[0].uid);
     assert.equal(status.state, 'idle');
     assert.equal(status.ready_for_work, true);
   });
 
   test('refreshState updates state', async () => {
     const { cl, agents } = await setup(1);
-    const s1 = cl.getAgentState(agents[0].uid);
-    const s2 = cl.refreshState(agents[0].uid);
+    const s1 = await cl.getAgentState(agents[0].uid);
+    const s2 = await cl.refreshState(agents[0].uid);
     assert.equal(s1.state, s2.state);
   });
 });
@@ -83,7 +87,7 @@ describe('collaborationLoop — rankByAvailability (#74)', () => {
       capabilities: a.capabilities || ['testing'],
     }));
 
-    const ranked = cl.rankByAvailability(agentData, ['testing']);
+    const ranked = await cl.rankByAvailability(agentData, ['testing']);
     assert.equal(ranked.length, 3);
     // All idle initially, then sorted by capability match (all equal score)
     assert.ok(ranked.every((r) => r.isIdle));
@@ -97,7 +101,7 @@ describe('collaborationLoop — rankByAvailability (#74)', () => {
       { uid: 'a3', capabilities: ['frontend', 'react', 'css'] },
     ];
 
-    const ranked = cl.rankByAvailability(agents, ['frontend', 'react']);
+    const ranked = await cl.rankByAvailability(agents, ['frontend', 'react']);
     assert.ok(ranked[0].capScore >= ranked[1].capScore);
     assert.ok(ranked[0].capScore >= ranked[2].capScore);
   });
@@ -115,7 +119,7 @@ describe('collaborationLoop — findBestAgent (#72)', () => {
       capabilities: a.capabilities || ['testing'],
     }));
 
-    const best = cl.findBestAgent(agentData, ['testing'], 'sender-1');
+    const best = await cl.findBestAgent(agentData, ['testing'], 'sender-1');
     assert.ok(best);
     assert.ok(agents.some((a) => a.uid === best));
   });
@@ -123,7 +127,7 @@ describe('collaborationLoop — findBestAgent (#72)', () => {
   test('findBestAgent excludes sender', async () => {
     const cl = require('../lib/agentBus/collaborationLoop');
     const agents = [{ uid: 'sender-1', capabilities: ['testing'] }];
-    const best = cl.findBestAgent(agents, ['testing'], 'sender-1');
+    const best = await cl.findBestAgent(agents, ['testing'], 'sender-1');
     assert.equal(best, null, 'should return null when no candidates besides sender');
   });
 });

@@ -17,8 +17,11 @@ before(() => {
   tmpBase = path.join(os.tmpdir(), 'boos-respond-' + Date.now().toString(36));
   fs.mkdirSync(tmpBase, { recursive: true });
   process.env.BOOS_HOME = tmpBase;
-  for (const m of ['../lib/config', '../lib/agentBus/store', '../lib/agentBus/queue',
-    '../lib/agentBus/registry', '../lib/agentBus/handlers']) {
+  for (const m of ['../lib/config', '../lib/agentBus/store',
+    '../lib/agentBus/storeAgents', '../lib/agentBus/storeTasks',
+    '../lib/agentBus/storeCore', '../lib/agentBus/storeIdentity',
+    '../lib/agentBus/auth', '../lib/agentBus/handlersAdmin',
+    '../lib/agentBus/queue', '../lib/agentBus/registry', '../lib/agentBus/handlers']) {
     try { delete require.cache[require.resolve(m)]; } catch {}
   }
 });
@@ -32,15 +35,22 @@ describe('respond_task single-step completion (Sprint 20 regression)', () => {
   test('receiver can respond_task on a request task without a prior response send', async () => {
     const registry = require('../lib/agentBus/registry');
     const store = require('../lib/agentBus/store');
+    const queue = require('../lib/agentBus/queue');
     const { dispatch } = require('../lib/agentBus/handlers');
 
+    // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
+    // Sprint 37: worker→supervisor responses enter "submitted" (PM settlement).
+    // Use a worker sender so respond_task auto-completes in one step, matching
+    // the Sprint 20 single-step intent without the settlement gate.
     const pm = await registry.registerAgent({
       name: 'resp-pm', intro: 'sender', workspace: 'boos',
-      role: 'supervisor', capabilities: ['test'],
+      role: 'worker', capabilities: ['test'],
+      cliSessionId: 'resp-pm-uid',
     });
     const worker = await registry.registerAgent({
       name: 'resp-worker', intro: 'receiver', workspace: 'boos',
       role: 'worker', capabilities: ['test'],
+      cliSessionId: 'resp-worker-uid',
     });
 
     const pmCtx = { sessionId: 'sess-pm', uid: pm.uid, workspace: 'boos' };
@@ -65,7 +75,9 @@ describe('respond_task single-step completion (Sprint 20 regression)', () => {
     assert.ok(responded.ok, 'respond_task must succeed in one step: ' + JSON.stringify(responded));
 
     // Task is now completed with the result recorded.
-    const finalTask = store.getTask(taskId);
+    // Sprint 35: completed tasks are archived — query the archive.
+    const finalTask = await queue.getArchivedTask(taskId);
+    assert.ok(finalTask, 'task should be archived after completion');
     assert.equal(finalTask.status, 'completed', 'task should be completed');
     assert.equal(finalTask.result, 'X is done', 'result should be recorded');
   });
@@ -74,17 +86,21 @@ describe('respond_task single-step completion (Sprint 20 regression)', () => {
     const registry = require('../lib/agentBus/registry');
     const { dispatch } = require('../lib/agentBus/handlers');
 
+    // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
     const pm = await registry.registerAgent({
       name: 'resp-pm2', intro: 'sender', workspace: 'boos',
       role: 'supervisor', capabilities: ['test'],
+      cliSessionId: 'resp-pm2-uid',
     });
     const worker = await registry.registerAgent({
       name: 'resp-worker2', intro: 'receiver', workspace: 'boos',
       role: 'worker', capabilities: ['test'],
+      cliSessionId: 'resp-worker2-uid',
     });
     const stranger = await registry.registerAgent({
       name: 'resp-stranger', intro: 'not the receiver', workspace: 'boos',
       role: 'worker', capabilities: ['test'],
+      cliSessionId: 'resp-stranger-uid',
     });
 
     const pmCtx = { sessionId: 'sess-pm2', uid: pm.uid, workspace: 'boos' };

@@ -14,11 +14,32 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
-const path = require('path');
+const os = require('node:os');
+const path = require('node:path');
 
-const goalStore = require('../lib/agentBus/goalStore');
-const store = require('../lib/agentBus/store');
-const registry = require('../lib/agentBus/registry');
+let goalStore, store, registry;
+let _testHome;
+before(() => {
+  // Isolate from real ~/.boos production data + other test files in the
+  // same run. Module-level DATA_DIR binds at load, so re-require after set.
+  _testHome = path.join(os.tmpdir(), 'boos-goals-' + Date.now().toString(36));
+  fs.mkdirSync(_testHome, { recursive: true });
+  process.env.BOOS_HOME = _testHome;
+  for (const m of ['../lib/config', '../lib/agentBus/storeCore',
+    '../lib/agentBus/store', '../lib/agentBus/storeAgents',
+    '../lib/agentBus/storeTasks', '../lib/agentBus/storeIdentity',
+    '../lib/agentBus/goalStore', '../lib/agentBus/registry',
+    '../lib/agentBus/auth', '../lib/agentBus/handlersAdmin']) {
+    try { delete require.cache[require.resolve(m)]; } catch {}
+  }
+  goalStore = require('../lib/agentBus/goalStore');
+  store = require('../lib/agentBus/store');
+  registry = require('../lib/agentBus/registry');
+});
+after(() => {
+  delete process.env.BOOS_HOME;
+  try { fs.rmSync(_testHome, { recursive: true, force: true }); } catch {}
+});
 
 const TEST_WS = 'test-goals';
 const TEST_PROJECT = 'test-project';

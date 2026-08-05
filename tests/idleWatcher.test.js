@@ -9,8 +9,21 @@
 
 const { describe, test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
+const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { createIdleWatcher, IDLE_CHECK_MS, DEFAULT_IDLE_TIMEOUT_MS, HEARTBEAT_WINDOW_MS } = require('../lib/idleWatcher');
+
+// Point BOOS_HOME at an empty temp dir so check()'s "hasPendingAgentWork"
+// probe (reads DATA_DIR/agent-bus/inbox/) never finds a real ~/.boos inbox
+// with leftover tasks — that would make isActive spuriously true.
+const _testHome = path.join(os.tmpdir(), 'boos-idlewatcher-test-' + Date.now().toString(36));
+before(() => { process.env.BOOS_HOME = _testHome; });
+after(() => {
+  delete process.env.BOOS_HOME;
+  try { fs.rmSync(_testHome, { recursive: true, force: true }); } catch {}
+});
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
