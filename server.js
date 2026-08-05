@@ -477,6 +477,13 @@ function listenWithFallback(preferred) {
   try { require('./lib/archive').startPeriodicPrune(); }
   catch (e) { console.warn('[boos] archive system failed to start:', e.message); }
 
+  // Sprint 41: sweep externalized-content cache files older than 7 days.
+  try {
+    const cacheStore = require('./lib/agentBus/cacheStore');
+    const swept = cacheStore.sweep();
+    if (swept > 0) console.log('[boos] cache sweep:', swept, 'expired content files removed');
+  } catch (e) { console.warn('[boos] cache sweep failed:', e.message); }
+
   // Agent-bus task lifecycle: auto-archive terminal tasks on startup,
 	  // then every 6 hours. Newly terminal tasks are auto-archived immediately
 	  // by updateTaskStatus → _autoArchiveTask.
