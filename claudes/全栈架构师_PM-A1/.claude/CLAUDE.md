@@ -182,6 +182,36 @@ Workspace: `boos` | UID = Claude `--resume` UUID
 
 ---
 
+## 上下文检索优先级 — openviking 优先 (Sprint 42, 2026-08-06)
+
+> **用户决策**: 优先使用 openviking 做召回。recall 命中率 95%，跨会话/跨 agent 问题的
+> 期望收益为正。部署在 `192.168.2.200:1933/mcp`（**Linux 服务器**，非本机，HTTP MCP + x-api-key）。
+
+**触发规则**（按问题类型决定第一检索动作）:
+
+| 问题类型 | 第一动作 | 理由 |
+|---------|---------|------|
+| 跨会话/跨 agent（"上次谁处理过 X"、"Sprint N 决策依据"、某 UID/角色） | **openviking recall** | CLAUDE.md 装不下，文件系统散，recall 命中率高 |
+| 当前会话已注入的事实（UID、端口、当前 Sprint 状态） | 直接用 CLAUDE.md / MEMORY.md | 零成本，无需检索 |
+| 任务内容 / 信件全文 | agent-bus cacheStore (`get_task_content`) | 结构化引用，100% 命中 |
+| recall 未命中或需源码级细节 | 文件系统 / codegraph | fallback 兜底 |
+
+**执行纪律**:
+1. 命中触发规则的问题，**先 recall 再查文件**，不要跳过
+2. recall query 写法: 具体名词 + 领域词（如 `PTY 注入 sprint 38 修复`），`max_chars` 限制返回体积
+3. 每次决策最多 1 次 recall；返回按相关度排序，只精读前 2-3 条
+4. 有值得跨会话保留的决策 → `openviking.remember`（提取异步，不阻塞）
+
+**⚠️ 已知断粮**: ~~`memories/events/` 自 2026-07 底后无新事件 — 提取 LLM 链路
+(代理 192.168.2.13:8899 → packyapi deepseek-v4-pro) 需验证。不修则 recall 只能召回历史数据。~~
+**✅ 已修复 (2026-08-06)**: 根因 = ov.conf vlm 段 `qwen-vl-plus` → LiteLLM 路由到 dashscope
+provider → key 是阿里 AI Coding 服务的 key → 401。修复 = model 改 `anthropic/qwen3.7-plus`
++ api_base=`https://coding.dashscope.aliyuncs.com/apps/anthropic`（与 BOOS 共用 AI Coding 端点），
+重启服务 (nohup openviking-server --with-bot >> /tmp/ov-bot.log 2>&1 &)。验证: LLM 调用成功
+(provider=anthropic)、events/2026/08 事件落地、recall 语义召回命中。备份: ov.conf.bak-20260806。
+
+---
+
 ## Sprint 16 完成情况 (2026-07-16)
 
 ### ✅ 已完成

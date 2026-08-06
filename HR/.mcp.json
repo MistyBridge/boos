@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "agent-bus": {
-      "type": "sse",
-      "url": "http://127.0.0.1:7780/mcp/sse",
+      "command": "node",
+      "args": [
+        "C:/Users/admin/.boos/mcp-proxy.js"
+      ],
       "env": {
         "BOOS_CLI_SESSION_ID": "9b0ab467-42b8-4e63-a0da-c57a85606d53"
       }
