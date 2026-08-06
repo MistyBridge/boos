@@ -91,9 +91,8 @@ function Sparkline({ series }) {
           boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
         }}>
           <div style="font-weight:600;margin-bottom:2px;">${timeStr(tip.data.t)}</div>
-          <div>输入: <span style="color:#8db5e0;">${fmt(tip.data.input)}</span></div>
-          <div>缓存读: <span style="color:#8db5e0;">${fmt(tip.data.cacheRead)}</span></div>
-          <div>缓存写: <span style="color:#8db5e0;">${fmt(tip.data.cacheCreation)}</span></div>
+          <div>输入(未命中): <span style="color:#8db5e0;">${fmt((tip.data.input || 0) + (tip.data.cacheCreation || 0))}</span></div>
+          <div>输入(缓存命中): <span style="color:#8db5e0;">${fmt(tip.data.cacheRead)}</span></div>
           <div>输出: <span style="color:#e8b4a8;">${fmt(tip.data.output)}</span></div>
         </div>
       ` : null}
