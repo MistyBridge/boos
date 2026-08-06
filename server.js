@@ -413,14 +413,16 @@ function listenWithFallback(preferred) {
   // PostgreSQL (degraded if Docker unavailable), agent-bus notifications,
   // archive system, tunnel prewarm.
   if (process.env.BOOS_NO_POSTGRES !== '1') {
-    try { await require('./lib/postgres').ensureContainer(); }
-    catch (e) { console.warn('[boos] postgres: ensureContainer failed —', e.message); }
+    // Sprint 42: PostgreSQL removed — SQLite is embedded, nothing to ensure.
   }
 
   if (process.env.BOOS_NO_AGENT_BUS_WATCH !== '1') {
     try {
-      const { bootstrapIdentities } = require('./lib/agentBus/store');
+      const { bootstrapIdentities, dedupeIdentities } = require('./lib/agentBus/store');
       bootstrapIdentities().catch(e => console.warn('[boos] bootstrapIdentities failed:', e.message));
+      // Sprint 42: dedupe stale duplicate identity cards (session rebuilds
+      // create new UUIDs with the same name+workspace).
+      dedupeIdentities().catch(e => console.warn('[boos] dedupeIdentities failed:', e.message));
 
       // Sprint 35: migrate legacy tasks from shared agent-bus.json to per-agent inbox files.
       // One-time migration — subsequent starts will skip if inbox files already exist.

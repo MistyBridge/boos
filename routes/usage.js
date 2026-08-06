@@ -66,28 +66,25 @@ function parseTranscript(file, maxMsgs = 100000, seriesLimit = 0, skipUsage = 0,
         try { onUsage(obj.timestamp || obj.created_at || null, usage); } catch { /* never break parse */ }
       }
 
-      // Dedupe: Claude Code replays messages on retry, writing identical
-      // usage rows back-to-back (57% of rows were duplicates in testing).
-      // Series should show one bar per distinct event, not per retry echo.
-      const pt = {
-        t: obj.timestamp || obj.created_at || null,
-        input: usage.input_tokens || 0,
-        cacheRead: usage.cache_read_input_tokens || 0,
-        cacheCreation: usage.cache_creation_input_tokens || 0,
-        output: usage.output_tokens || 0,
-      };
-      const last = series[series.length - 1];
-      if (last && last.input === pt.input && last.output === pt.output
-          && last.cacheRead === pt.cacheRead && last.cacheCreation === pt.cacheCreation) {
-        continue;   // exact retry echo — skip
-      }
-
-      // Rolling window: keep only the last seriesLimit entries.
+      // Only build series when the caller actually needs them.
+      // Callers that pass seriesLimit === 0 use onUsage for aggregation
+      // and discard the returned series — skip the work.
       if (seriesLimit > 0) {
-        if (series.length >= seriesLimit) series.shift();
-        series.push(pt);
-      } else {
-        series.push(pt);
+        // Dedupe: Claude Code replays messages on retry, writing identical
+        // usage rows back-to-back (57% of rows were duplicates in testing).
+        const pt = {
+          t: obj.timestamp || obj.created_at || null,
+          input: usage.input_tokens || 0,
+          cacheRead: usage.cache_read_input_tokens || 0,
+          cacheCreation: usage.cache_creation_input_tokens || 0,
+          output: usage.output_tokens || 0,
+        };
+        const last = series[series.length - 1];
+        if (!(last && last.input === pt.input && last.output === pt.output
+            && last.cacheRead === pt.cacheRead && last.cacheCreation === pt.cacheCreation)) {
+          if (series.length >= seriesLimit) series.shift();
+          series.push(pt);
+        }
       }
     }
   } catch { /* file gone mid-read — return what we have */ }
@@ -264,7 +261,26 @@ function register(app, { asyncH, persistedSessions }) {
       parseTranscript(file, 1000000, 0, skip));
     const cumulative = ledger.totals;
 
-    registerTrendRoute(app, asyncH);   // Sprint 42: /api/usage/trend
+    // ---- Sprint 42: reset cumulative ledger to current-scan baseline ----
+    app.post('/api/usage/ledger/reset', asyncH(async (req, res) => {
+      // ROOT-only: loopback requests only (local BOOS server).
+      const { isDirectLoopback } = require('../lib/middleware');
+      if (!isDirectLoopback(req)) {
+        return res.status(403).json({ error: 'ROOT permission required — localhost only' });
+      }
+
+      const transcripts = scanAllTranscripts();
+      const result = usageLedger.rebuildBaseline(transcripts,
+        (file, skip) => parseTranscript(file, 1000000, 0, skip));
+
+      res.json({
+        ok: true,
+        action: 'ledger-reset',
+        baseline: result.totals,
+        files: Object.keys(result.byFile).length,
+        updatedAt: result.updatedAt,
+      });
+    }));
 
     res.json({
       generatedAt: new Date().toISOString(),
@@ -278,6 +294,9 @@ function register(app, { asyncH, persistedSessions }) {
       sessions,
     });
   }));
+
+  // Sprint 42: time-bucketed usage trend — registered once at startup
+  registerTrendRoute(app, asyncH);
 
   // ---- single-session detail ----
   app.get('/api/usage/:id', asyncH(async (req, res) => {

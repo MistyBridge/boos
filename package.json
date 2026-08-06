@@ -20,11 +20,11 @@
     "CLAUDE.md"
   ],
   "scripts": {
-    "start": "node server.js",
-    "dev": "node scripts/dev.js",
-    "test": "node --test tests/**/*.test.js",
-    "test:coverage": "c8 node --test tests/**/*.test.js",
-    "test:e2e": "node --test tests/e2e/smoke.test.js",
+    "start": "node --experimental-sqlite server.js",
+    "dev": "node --experimental-sqlite scripts/dev.js",
+    "test": "node --experimental-sqlite --test tests/**/*.test.js",
+    "test:coverage": "c8 node --experimental-sqlite --test tests/**/*.test.js",
+    "test:e2e": "node --experimental-sqlite --test tests/e2e/smoke.test.js",
     "test:e2e:playwright": "npx playwright test --config tests/e2e/playwright.config.js",
     "bench:pty": "node tests/bench/pty-spawn.bench.js",
     "lint": "eslint .",
@@ -45,7 +45,6 @@
     "@xterm/xterm": "^5.5.0",
     "express": "^4.21.2",
     "htm": "^3.1.1",
-    "pg": "^8.22.0",
     "preact": "^10.27.0"
   },
   "optionalDependencies": {

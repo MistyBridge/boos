@@ -71,3 +71,76 @@ test('ledger: persistence across load()', () => {
   assert.strictEqual(loaded.byFile.f.usageMsgs, 1);
   ledger.reset();
 });
+
+// ── Sprint 42: rebuildBaseline ───────────────────────────────────────────
+
+test('ledger: rebuildBaseline counts everything from scratch', () => {
+  ledger.reset();
+  // First, build up some incremental state.
+  const txs = [{ file: 'a' }, { file: 'b' }];
+  ledger.update(txs, fakeParse({ a: [[100, 0, 10]], b: [[200, 0, 20]] }));
+  // Simulate deleted transcript: file 'b' is gone, but cursor still has it.
+  // rebuildBaseline should only count what's actually on disk NOW.
+  const result = ledger.rebuildBaseline(
+    [{ file: 'a' }, { file: 'c' }],
+    fakeParse({ a: [[100, 0, 10], [50, 0, 5]], c: [[300, 0, 30]] }),
+  );
+  // a: 150input + c: 300input = 450 (b's 200 is NOT included — it's gone)
+  assert.strictEqual(result.totals.input, 450, 'only counts current files');
+  assert.strictEqual(result.totals.output, 45);
+  assert.ok(result.byFile.a);
+  assert.ok(result.byFile.c);
+  assert.strictEqual(result.byFile.b, undefined, 'deleted file not in byFile');
+});
+
+test('ledger: rebuildBaseline resets the cursor', () => {
+  ledger.reset();
+  const txs = [{ file: 'x' }];
+  // Incremental update builds cursor.
+  const r1 = ledger.update(txs, fakeParse({ x: [[10, 0, 1]] }));
+  assert.strictEqual(r1.totals.input, 10);
+  // Rebuild from the SAME files — totals should now equal the rebuild count,
+  // NOT the old cumulative + the increment.
+  const r2 = ledger.rebuildBaseline(txs, fakeParse({ x: [[10, 0, 1], [20, 0, 2]] }));
+  assert.strictEqual(r2.totals.input, 30, 'rebuild is exact current-total, not cumulative + delta');
+  assert.strictEqual(r2.totals.output, 3);
+});
+
+test('ledger: rebuildBaseline with empty transcripts returns zeroed totals', () => {
+  ledger.reset();
+  // Seed some state first.
+  ledger.update([{ file: 'old' }], fakeParse({ old: [[1000, 0, 100]] }));
+  // Rebuild with no files → should be all zeros.
+  const result = ledger.rebuildBaseline([], fakeParse({}));
+  assert.strictEqual(result.totals.input, 0);
+  assert.strictEqual(result.totals.output, 0);
+  assert.deepStrictEqual(result.byFile, {});
+});
+
+test('ledger: rebuildBaseline persists (loadable after rebuild)', () => {
+  ledger.reset();
+  ledger.rebuildBaseline(
+    [{ file: 'f' }],
+    fakeParse({ f: [[77, 0, 7]] }),
+  );
+  const loaded = ledger.load();
+  assert.strictEqual(loaded.totals.input, 77);
+  assert.strictEqual(loaded.totals.output, 7);
+  assert.strictEqual(loaded.byFile.f.usageMsgs, 1);
+  ledger.reset();
+});
+
+test('ledger: rebuildBaseline handles unreadable files gracefully', () => {
+  ledger.reset();
+  // File that throws on read — should be skipped without crashing.
+  const badParse = (file, skip) => {
+    if (file === 'bad') throw new Error('ENOENT');
+    return { total: { input: 10, cacheRead: 0, cacheCreation: 0, output: 1, msgs: 1 }, usageMsgs: 1 };
+  };
+  const result = ledger.rebuildBaseline(
+    [{ file: 'bad' }, { file: 'good' }],
+    badParse,
+  );
+  assert.strictEqual(result.totals.input, 10, 'bad file skipped, good counted');
+  assert.strictEqual(result.byFile.bad, undefined);
+});

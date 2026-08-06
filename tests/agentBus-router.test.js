@@ -248,6 +248,7 @@ describe('transport router integration', () => {
             tool_name: 'register_agent',
             args: {
               name: 'router-test-agent', workspace: 'router-test',
+              role: 'supervisor',   // Sprint 42: workspace creation is PM-only
               cli_session_id: `router-test-uid-${process.pid}`,
             },
           },

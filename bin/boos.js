@@ -225,7 +225,8 @@ function isSameVersion(running) {
   const out = fs.openSync(LOG, 'a');
   fs.writeSync(out, `\n[${new Date().toISOString()}] boos starting (protocol=${protocol?.raw || '-'})...\n`);
 
-  const child = spawn(process.execPath, [SERVER], {
+  // Sprint 42: SQLite identity store needs the experimental flag.
+  const child = spawn(process.execPath, ['--experimental-sqlite', SERVER], {
     detached: true,
     stdio: ['ignore', out, out],
     windowsHide: true,

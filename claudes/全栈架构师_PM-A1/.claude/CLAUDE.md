@@ -212,6 +212,20 @@ provider → key 是阿里 AI Coding 服务的 key → 401。修复 = model 改 
 
 ---
 
+## 运维纪律 (Sprint 42, 2026-08-06)
+
+1. **注册表操作先快照**: 任何批量删除/purge 前调用 `registry.snapshot()`（自动轮转 5 份
+   `agent-bus.snap-*.json`）。误删可回滚。
+2. **工作区创建权**: 仅 supervisor(PM) 可新建 workspace；worker 只能选已有。
+   清空注册表后恢复顺序: PM 先 register（创建 boos）→ 其余 agent 自动归位。
+3. **禁用外部直改持久化文件**: sessions.json / agent-bus.json 一律走 API/工具
+   （cli-session-id 修正端点、purge_workspace），禁止手工编辑（会被 sessionBinding 覆盖）。
+4. **安全提醒**: openviking 服务器 (192.168.2.200) SSH 初始密码需改；x-api-key 可轮换
+   （.mcp.json 明文）。agent 无法自我重启 BOOS（宿主即 agent）—— 版本不一致时提示人类重启。
+5. **身份去重**: 会话重建会产生同名多卡 — 启动时 `dedupeIdentities()` 自动清理（保留最新）。
+
+---
+
 ## Sprint 16 完成情况 (2026-07-16)
 
 ### ✅ 已完成
