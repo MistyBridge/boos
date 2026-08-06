@@ -4,7 +4,7 @@
 
 import { html } from '../html.js';
 import { useEffect, useState } from 'preact/hooks';
-import { fetchUsage } from '../api.js';
+import { fetchUsage, fetchUsageTrend } from '../api.js';
 import { setToast } from '../toast.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { PageTitleBar } from '../components/PageTitleBar.js';
@@ -27,6 +27,7 @@ function statusLabel(s) {
   if (s === 'running') return '运行中';
   if (s === 'idle') return '空闲';
   if (s === 'exited') return '已退出';
+  if (s === 'deleted') return '已删除';
   return s || '-';
 }
 
@@ -112,6 +113,116 @@ function SummaryCard({ label, value, sub, color }) {
     </article>`;
 }
 
+// ── Sprint 42: time-bucketed usage trend ─────────────────────────────
+// Granularity switch (month/week/day/hour/minute) + bar chart + tooltip.
+
+const GRANULARITIES = [
+  ['month', '月'], ['week', '周'], ['day', '日'], ['hour', '小时'], ['minute', '分钟'],
+];
+
+const TREND_W = 860, TREND_H = 140;
+
+function trendTimeLabel(granularity, t) {
+  if (!t) return '';
+  const d = new Date(t);
+  const pad = (n) => String(n).padStart(2, '0');
+  switch (granularity) {
+    case 'minute': return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    case 'hour': return `${pad(d.getHours())}:00`;
+    case 'day': return `${d.getMonth() + 1}/${d.getDate()}`;
+    case 'week': return `${d.getMonth() + 1}/${d.getDate()}周`;
+    case 'month': return `${d.getFullYear()}/${d.getMonth() + 1}`;
+    default: return d.toLocaleString();
+  }
+}
+
+function TimeBars({ buckets, granularity }) {
+  const [tip, setTip] = useState(null);
+
+  if (!buckets || buckets.length === 0) {
+    return html`<span class="mono" style="font-size:12px;color:var(--ink-muted);">该时间段暂无数据</span>`;
+  }
+
+  const maxVal = Math.max(...buckets.map((b) =>
+    Math.max((b.input || 0) + (b.cacheCreation || 0), b.output || 0)), 1);
+  const barW = Math.max(2, (TREND_W / buckets.length) - 2);
+
+  // 柱高下限 — 全 0 桶显示 2px 底痕
+  const h = (v) => Math.max(v > 0 ? 3 : 2, (v / maxVal) * TREND_H);
+
+  return html`
+    <div style="position:relative;">
+      <svg width=${TREND_W} height=${TREND_H} style="display:block;background:var(--bg);border-radius:6px;border:1px solid var(--border);"
+           onMouseLeave=${() => setTip(null)}>
+        ${buckets.map((b, i) => {
+          const missIn = (b.input || 0) + (b.cacheCreation || 0);
+          const x = i * (barW + 2);
+          return html`
+            <g key=${i}>
+              <rect x=${x} y=${TREND_H - h(missIn)} width=${barW} height=${h(missIn)}
+                    fill="#4a73a5" opacity=${tip && tip.i === i ? '0.9' : '0.55'} rx="1" />
+              <rect x=${x} y=${TREND_H - h(b.output || 0)} width=${barW} height=${h(b.output || 0)}
+                    fill="#b3614a" opacity=${tip && tip.i === i ? '0.85' : '0.5'} rx="1" />
+              <rect x=${x} y="0" width=${Math.max(barW, 6)} height=${TREND_H} fill="transparent"
+                    onMouseEnter=${(e) => setTip({ i, x: e.offsetX, y: e.offsetY, data: b })}
+                    onMouseMove=${(e) => setTip({ i, x: e.offsetX, y: e.offsetY, data: b })} />
+            </g>`;
+        })}
+      </svg>
+
+      ${tip ? html`
+        <div style=${{
+          position: 'absolute',
+          left: `${Math.min(tip.x + 12, TREND_W - 200)}px`,
+          top: `${Math.max(tip.y - 92, 0)}px`,
+          background: 'var(--ink)', color: 'var(--bg-elev)',
+          fontSize: '11px', padding: '6px 10px', borderRadius: '6px',
+          lineHeight: '1.5', pointerEvents: 'none', whiteSpace: 'nowrap',
+          zIndex: '100', fontVariantNumeric: 'tabular-nums',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        }}>
+          <div style="font-weight:600;margin-bottom:2px;">${trendTimeLabel(granularity, tip.data.t)}</div>
+          <div>输入(未命中): <span style="color:#8db5e0;">${fmt((tip.data.input || 0) + (tip.data.cacheCreation || 0))}</span></div>
+          <div>输入(缓存命中): <span style="color:#8db5e0;">${fmt(tip.data.cacheRead)}</span></div>
+          <div>输出: <span style="color:#e8b4a8;">${fmt(tip.data.output)}</span></div>
+        </div>
+      ` : null}
+    </div>`;
+}
+
+function TrendSection() {
+  const [gran, setGran] = useState('hour');
+  const [trend, setTrend] = useState(null);
+  const [loadingTrend, setLoadingTrend] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingTrend(true);
+    fetchUsageTrend(gran)
+      .then((r) => { if (!cancelled) setTrend(r); })
+      .catch((e) => { if (!cancelled) setToast(e.message || '加载趋势失败', 'error'); })
+      .finally(() => { if (!cancelled) setLoadingTrend(false); });
+    return () => { cancelled = true; };
+  }, [gran]);
+
+  return html`
+    <div class="card" style="margin-bottom:var(--s-3);padding:var(--s-3) var(--s-4);">
+      <div class="row" style="align-items:center;justify-content:space-between;margin-bottom:var(--s-2);">
+        <div style="font-size:13px;font-weight:600;">时间段用量</div>
+        <div class="row" style="gap:4px;">
+          ${GRANULARITIES.map(([g, label]) => html`
+            <button class="action subtle small" style=${gran === g
+              ? 'background:var(--ink);color:var(--bg-elev);border-color:var(--ink);'
+              : ''}
+              onClick=${() => setGran(g)}>${label}</button>
+          `)}
+        </div>
+      </div>
+      ${loadingTrend ? html`<p style="font-size:12px;color:var(--ink-muted);">加载中…</p>` : null}
+      ${!loadingTrend ? html`<${TimeBars} buckets=${trend?.buckets || []} granularity=${gran} />` : null}
+    </div>`;
+}
+
 // ── Page ──────────────────────────────────────────────────────────
 
 export function UsagePage() {
@@ -162,6 +273,8 @@ export function UsagePage() {
           <${SummaryCard} label="会话数" value=${sessions.length} color="var(--ink-mid)" />
         </div>
 
+        <${TrendSection} />
+
         ${loading ? html`
           <p style="font-size:13px;color:var(--ink-muted);text-align:center;padding:var(--s-4);">加载中…</p>
         ` : null}
@@ -203,8 +316,8 @@ export function UsagePage() {
                           <span style="font-weight:500;">${s.cliId || '-'}</span>
                         </span>
                       </td>
-                      <td class="path-cell" title=${s.title || s.cwd || ''}>
-                        ${s.title || (s.cwd || '').split(/[\\/]/).filter(Boolean).pop() || '-'}
+                      <td class="path-cell" title=${s.title || s.cwd || s.projectSlug || ''}>
+                        ${s.title || (s.cwd || '').split(/[\\/]/).filter(Boolean).pop() || (s.orphan ? (s.projectSlug || '').split(/[\\/-]/).filter(Boolean).pop() + '·' + s.id.slice(-8) : '-')}
                       </td>
                       <td>
                         <span class="status-mark ${s.status === 'running' ? 'busy' : ''}"
