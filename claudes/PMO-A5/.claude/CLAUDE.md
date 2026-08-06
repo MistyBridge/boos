@@ -70,3 +70,19 @@ PMO 在文件夹 Agent 权限设置中是一个独立等级：
 ---
 
 *Sprint 32 · 去轮询化 · 手动指派 · 工作区唯一*
+
+
+## 上下文检索优先级 — openviking 优先 (Sprint 42, 2026-08-06)
+
+| 问题类型 | 第一动作 |
+|---------|---------|
+| 跨会话/跨 agent（"上次谁处理过 X"、"Sprint N 决策依据"、某 UID/角色） | **openviking recall** 优先，命中率 95%，再查文件 |
+| 当前会话已注入的事实 | 直接用 CLAUDE.md / MEMORY.md |
+| 任务内容 / 信件全文 | agent-bus `get_task_content` |
+| recall 未命中 / 源码级细节 | 文件系统 / codegraph |
+
+1. 命中触发规则的问题，**先 recall 再查文件**，不要跳过
+2. recall query 写法: 具体名词 + 领域词（如 `PTY 注入 sprint 38 修复`），`max_chars` 限制返回体积
+3. 每次决策最多 1 次 recall；只精读前 2-3 条；值得跨会话保留的决策 → `remember`
+
+> 完整指南: `HR/assets/AGENT-CONFIG-UPDATE-2026-08-06.md` · 提取链已修复（ov.conf vlm=anthropic/qwen3.7-plus + AI Coding 端点）

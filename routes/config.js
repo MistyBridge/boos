@@ -6,6 +6,8 @@
 //           stripTunnelKeys, spawnEnv }
 
 'use strict';
+const errReport = require('../lib/errorReport');   // Sprint 42: no silent failures
+
 
 function register(app, { asyncH, loadConfig, saveConfig, decorateConfigWithProbes, stripTunnelKeys, spawnEnv }) {
 
@@ -42,6 +44,7 @@ function register(app, { asyncH, loadConfig, saveConfig, decorateConfigWithProbe
       args = ['/d', '/s', '/c', `${cmd} ${versionArg}`];
     } else if (require('node:path').isAbsolute(cmd)) {
       const path = require('node:path');
+      const errReport = require("../lib/errorReport");
       const ext = path.extname(cmd).toLowerCase();
       if (ext === '.cmd' || ext === '.bat') {
         exe = process.env.ComSpec || 'cmd.exe';

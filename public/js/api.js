@@ -848,3 +848,8 @@ export async function settleTask(taskId, action, feedback) {
 export async function fetchUsage() {
   return api('GET', '/api/usage');
 }
+
+/** Fetch time-bucketed usage trend. → GET /api/usage/trend?granularity=… */
+export async function fetchUsageTrend(granularity = 'hour') {
+  return api('GET', `/api/usage/trend?granularity=${granularity}`);
+}

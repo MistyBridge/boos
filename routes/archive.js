@@ -6,6 +6,7 @@
 'use strict';
 
 const archive = require('../lib/archive');
+const errReport = require("../lib/errorReport");
 
 function register(app, { asyncH }) {
   // GET /api/archive/:type — list archived items

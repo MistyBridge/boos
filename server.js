@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 'use strict';
+const errReport = require('./lib/errorReport');   // Sprint 42: no silent failures
+
 
 const path = require('node:path');
 const os = require('node:os');
@@ -70,7 +72,7 @@ try {
   require('node:fs').writeFileSync(
     require('node:path').join(DATA_DIR, '.shutdown-token'), SHUTDOWN_TOKEN, 'utf-8'
   );
-} catch {}
+} catch (e) { errReport.report("server", "oper", e); }
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -124,7 +126,7 @@ const IS_DEV = !__dirname.includes(`${path.sep}node_modules${path.sep}`) && proc
     if (require('node:fs').statSync(nodeModulesDir).isDirectory()) {
       app.use('/node_modules', express.static(nodeModulesDir, { maxAge: '7d' }));
     }
-  } catch {}
+  } catch (e) { errReport.report("server", "oper", e); }
 }
 
 // ── Embedded Agent-Bus MCP ─────────────────────────────────────────
@@ -178,7 +180,7 @@ const _sh = createSessionHelpers({
         console.log('[boos] managedAgents auto-discovered:', discovered.length, 'paths');
         return discovered;
       }
-    } catch {}
+    } catch (e) { errReport.report("server", "oper", e); }
     // Fallback: manual config (legacy).
     try {
       return JSON.parse(require('node:fs').readFileSync(
@@ -274,7 +276,7 @@ if (process.env.BOOS_KEEP_ALIVE !== '1') {
 try {
   const { setSessionCountCallback } = require('./lib/agentBus/transport');
   setSessionCountCallback((n) => idleWatcher.setMcpConnectionCount(n));
-} catch {}
+} catch (e) { errReport.report("server", "oper", e); }
 
 // ---- health / capabilities / lifecycle ----
 require('./routes/health').register(app, {
@@ -354,10 +356,10 @@ function listenWithFallback(preferred) {
               const pid = parseInt(m[0], 10);
               if (pid && pid !== process.pid) {
                 console.log(`[boos] 强制终止 PID ${pid} (占用端口 ${preferred})`);
-                try { process.kill(pid, 'SIGKILL'); } catch {}
+                try { process.kill(pid, 'SIGKILL'); } catch (e) { errReport.report("server", "oper", e); }
               }
             }
-          } catch {}
+          } catch (e) { errReport.report("server", "oper", e); }
           await new Promise(r => setTimeout(r, 2000));
           attempt(retries + 1);
         })();
@@ -500,7 +502,7 @@ function listenWithFallback(preferred) {
 	  // Prewarm tunnel probe so Remote tab loads instantly.
   try {
     tunnel.probe(true).catch(() => {});
-  } catch {}
+  } catch (e) { errReport.report("server", "oper", e); }
 
   // Auto-start the tunnel if the user enabled it on the Remote page.
   // This is the BACKEND PROCESS bringing its own tunnel up on startup —
@@ -521,7 +523,7 @@ function listenWithFallback(preferred) {
     let WebSocketServer;
     try {
       ({ WebSocketServer } = require('ws'));
-    } catch {}
+    } catch (e) { errReport.report("server", "oper", e); }
     if (WebSocketServer) {
       const wss = new WebSocketServer({ noServer: true });
       server.on('upgrade', async (req, socket, head) => {
@@ -572,7 +574,7 @@ function listenWithFallback(preferred) {
   process.on('exit', () => {
     try {
       webTerminal.killAll();
-    } catch {}
+    } catch (e) { errReport.report("server", "oper", e); }
   });
 
   const apiUrl = `http://localhost:${port}`;
@@ -591,7 +593,7 @@ function listenWithFallback(preferred) {
     // Attempt graceful shutdown — at minimum this writes active-sessions.json
     // and removes port.lock so the next boot can cleanly take over the port
     // and auto-resume managed agent sessions.
-    try { gracefulShutdown('uncaught exception: ' + (err.message || 'unknown')); } catch {}
+    try { gracefulShutdown('uncaught exception: ' + (err.message || 'unknown')); } catch (e) { errReport.report("server", "oper", e); }
     // If gracefulShutdown didn't exit (e.g. it hung), force exit after 5s.
     setTimeout(() => process.exit(1), 5000).unref();
   });
@@ -631,26 +633,27 @@ function listenWithFallback(preferred) {
         hasManagedAgents = Object.values(allSessions).some(
           (s) => s.cliSessionId && !s.deletedAt && !s.manualStopped
         );
-      } catch {}
+      } catch (e) { errReport.report("server", "oper", e); }
       // MCP connections keep the server alive in all modes.
       let mcpCount = 0;
-      try { mcpCount = idleWatcher.status().mcpConnections || 0; } catch {}
+      try { mcpCount = idleWatcher.status().mcpConnections || 0; } catch (e) { errReport.report("server", "oper", e); }
       const hasMcp = mcpCount > 0;
       // Managed agent sessions with pending inbox tasks mean work is in flight.
       let agentsWithWork = 0;
       try {
         const inboxDir = require('node:path').join(DATA_DIR, 'agent-bus', 'inbox');
         const fs = require('node:fs');
+        const errReport = require("./lib/errorReport");
         if (fs.existsSync(inboxDir)) {
           const files = fs.readdirSync(inboxDir).filter((f) => f.endsWith('.json') && !f.endsWith('.bak'));
           for (const f of files) {
             try {
               const data = JSON.parse(fs.readFileSync(require('node:path').join(inboxDir, f), 'utf-8'));
               if ((data.pending || []).length + (data.in_progress || []).length > 0) agentsWithWork++;
-            } catch {}
+            } catch (e) { errReport.report("server", "oper", e); }
           }
         }
-      } catch {}
+      } catch (e) { errReport.report("server", "oper", e); }
 
       if (lifecycleState.heartbeatSeen) {
         if (Date.now() - lifecycleState.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {

@@ -8,6 +8,8 @@
 // GET /api/agents/events — SSE stream of agent-bus state changes
 
 'use strict';
+const errReport = require('../lib/errorReport');   // Sprint 42: no silent failures
+
 
 const persistedSessions = require('../lib/persistedSessions');
 const webTerminal = require('../lib/webTerminal');
@@ -35,7 +37,7 @@ function register(app, { asyncH }) {
         let boosSid = null;
         try {
           boosSid = resolver ? resolver.canonical(a.uid) : null;
-        } catch {}
+        } catch (e) { errReport.report("routes_agents", "canonical", e); }
         const transportSid = store.getSessionByAgentUid(a.uid);
         const sid = boosSid || transportSid;
         const session = sid ? live.find((s) => s.id === sid) : null;
@@ -104,7 +106,7 @@ function register(app, { asyncH }) {
     try {
       const notifications = require('../lib/agentBus/notifications');
       notifications.setFrontendNotify(notifyAgentActivity);
-    } catch {}
+    } catch (e) { errReport.report("routes_agents", "setFrontendNotify", e); }
 
     // Send initial snapshot.
     let store;
@@ -155,7 +157,7 @@ function register(app, { asyncH }) {
       try {
         handlers = require('../lib/agentBus/handlers');
         await handlers._internalLaunchAgentSession(agent.uid, agent.name, agent.workspace);
-      } catch {}
+      } catch (e) { errReport.report("routes_agents", "_internalLaunchAgentSession", e); }
     }
 
     try { notifications = require('../lib/agentBus/notifications'); } catch { notifications = null; }
@@ -244,14 +246,15 @@ function register(app, { asyncH }) {
     let sessions = [], resolver = null, webTerminalMod = null;
     try {
       const ps = require('../lib/persistedSessions');
+      const errReport = require("../lib/errorReport");
       sessions = await ps.loadAll();
-    } catch {}
-    try { resolver = require('../lib/identityResolver').getResolver(); } catch {}
-    try { webTerminalMod = require('../lib/webTerminal'); } catch {}
+    } catch (e) { errReport.report("routes_agents", "loadAll", e); }
+    try {  resolver = require('../lib/identityResolver').getResolver();  } catch (e) { errReport.report("routes_agents", "require", e); }
+    try {  webTerminalMod = require('../lib/webTerminal');  } catch (e) { errReport.report("routes_agents", "require", e); }
 
     const enriched = agents.map((agent) => {
       let boosSid = null;
-      try { boosSid = resolver ? resolver.canonical(agent.uid) : null; } catch {}
+      try {  boosSid = resolver ? resolver.canonical(agent.uid) : null;  } catch (e) { errReport.report("routes_agents", "canonical", e); }
       const transportSid = store.getSessionByAgentUid(agent.uid);
       const sid = boosSid || transportSid;
       const session = sid ? sessions.find((s) => s.id === sid && !s.deletedAt) : null;
@@ -268,7 +271,7 @@ function register(app, { asyncH }) {
       const online = !!(session && session.status === 'running' && ptyInfo && !ptyInfo.exitedAt);
 
       let activeTasks = [];
-      try { activeTasks = store.listActiveTasks(agent.uid); } catch {}
+      try {  activeTasks = store.listActiveTasks(agent.uid);  } catch (e) { errReport.report("routes_agents", "listActiveTasks", e); }
       const pendingTasks = store.countPendingTasks(agent.uid);
 
       return {

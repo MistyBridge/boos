@@ -6,6 +6,7 @@
 
 'use strict';
 const path = require('node:path');
+const errReport = require("../lib/errorReport");
 
 function register(app, { asyncH, folders, persistedSessions }) {
 

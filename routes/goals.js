@@ -11,6 +11,8 @@
 // Lines: ≤300
 
 'use strict';
+const errReport = require('../lib/errorReport');   // Sprint 42: no silent failures
+
 
 const goalStore = require('../lib/goalStore');
 const store = (() => { try { return require('../lib/agentBus/store'); } catch { return null; } })();
@@ -149,6 +151,7 @@ function register(app, { asyncH }) {
     if (blocked) return;
     try {
       const dagHandlers = require('../lib/agentBus/handlersDag');
+      const errReport = require("../lib/errorReport");
       const ctx = { uid: (req.headers['x-agent-uid'] || '82b97d58-c66e-45d3-9f6d-af3476d5abdd'), workspace: req.query.workspace || 'boos' };
       const result = await dagHandlers._goalArchive({ goal_id: req.params.id }, ctx);
       if (result.error) return res.status(400).json(result);

@@ -7,6 +7,8 @@
 //   deps: { asyncH }
 
 'use strict';
+const errReport = require('../lib/errorReport');   // Sprint 42: no silent failures
+
 
 const decisionSystem = require('../lib/decisionSystem');
 
@@ -86,7 +88,7 @@ function register(app, { asyncH }) {
       rootDbCount = Object.values(db.tasks || {}).filter(t =>
         t.receiver_uid === ROOT_UID && t.status !== 'completed' && t.status !== 'cancelled'
       ).length;
-    } catch {}
+    } catch (e) { errReport.report("routes_decisions", "values", e); }
 
     const totalUnread = decisionCount + Math.max(rootInboxCount, rootDbCount);
 
@@ -226,7 +228,7 @@ function register(app, { asyncH }) {
 function _emitUnreadChange() {
   try {
     decisionSystem._emitChange('unread_updated', {});
-  } catch {}
+  } catch (e) { errReport.report("routes_decisions", "_emitChange", e); }
 }
 
 // ── Auto-respond to agent via agent-bus ────────────────────────────────
@@ -251,6 +253,7 @@ async function _notifyAgentOfDecision(result, status, approver, comment) {
 
     const queue = _getQueue();
     const store = require('../lib/agentBus/store');
+    const errReport = require("../lib/errorReport");
     const ROOT_UID = store.ROOT_UID;
     const sender = {
       uid: ROOT_UID,

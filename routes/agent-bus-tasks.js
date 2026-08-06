@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const inboxStore = require('../lib/agentBus/inboxStore');
 const queue = require('../lib/agentBus/queue');
+const errReport = require("../lib/errorReport");
 
 const VALID_STATUSES = new Set(['pending', 'in_progress', 'completed', 'cancelled', 'interrupted', 'exhausted', 'blocked', 'notification']);
 
@@ -43,9 +44,9 @@ function register(app, { asyncH }) {
             const lines = (await require('fs/promises').readFile(archiveFile, 'utf-8'))
               .split('\n').filter(Boolean);
             for (const line of lines) {
-              try { tasks.push(JSON.parse(line)); } catch {}
+              try {  tasks.push(JSON.parse(line));  } catch (e) { errReport.report("routes_agent-bus-tasks", "push", e); }
             }
-          } catch {}
+          } catch (e) { errReport.report("routes_agent-bus-tasks", "push", e); }
         }
       } catch { tasks = []; }
     } else {
@@ -58,9 +59,9 @@ function register(app, { asyncH }) {
           try {
             const inbox = await inboxStore.loadInbox(f.replace('.json', ''));
             tasks.push(...inbox.pending, ...inbox.in_progress);
-          } catch {}
+          } catch (e) { errReport.report("routes_agent-bus-tasks", "push", e); }
         }
-      } catch {}
+      } catch (e) { errReport.report("routes_agent-bus-tasks", "push", e); }
     }
 
     // Filter, sort, limit.

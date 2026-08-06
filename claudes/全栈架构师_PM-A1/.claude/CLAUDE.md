@@ -156,7 +156,7 @@ Workspace: `boos` | UID = Claude `--resume` UUID
 | PMO-A5 | `f21556fd-a69b-47d0-b6c6-8da9e0a9921d` | 🟢 |
 | 前端工程师-A3 | `90490923-dc5b-4ac8-be3f-62c3efbe2bb0` | 🟢 |
 | 平台集成工程师-A4 | `d428dd45-f2ac-40e7-8825-4e82ba98686a` | 🟢 |
-| 可靠性工程师-A2 | `81c99498-c60d-4d92-8ae8-fe5ec41d5cab` | 🟢 |
+| 可靠性工程师-A2 | `c65941f6-cb8d-4345-990f-821b2ee06af3` | 🟢 |
 
 > ⚠️ Sprint 33: 彻底废除 agent_xxx/sess-xxx/boos_session_id。UID = Claude 自己的 --resume UUID。name 仅为元数据。
 
@@ -314,7 +314,7 @@ routes/sessions-launch.js ← /api/sessions/new + resume (360 lines)
 |---------|--------|-----|
 | 前端/UI/CSS/Preact/xterm.js | 前端工程师-A3 | 90490923-dc5b-4ac8-be3f-62c3efbe2bb0 |
 | Agent-Bus/MCP/SSE/跨平台 | 平台集成工程师-A4 | d428dd45-f2ac-40e7-8825-4e82ba98686a |
-| 测试/E2E/安全审计/CI | 可靠性工程师-A2 | 81c99498-c60d-4d92-8ae8-fe5ec41d5cab |
+| 测试/E2E/安全审计/CI | 可靠性工程师-A2 | c65941f6-cb8d-4345-990f-821b2ee06af3 |
 | 架构设计/server.js/路由/DB | PM (自己) | 82b97d58-c66e-45d3-9f6d-af3476d5abdd |
 
 ### PM 工作流 (唤醒指令模式)

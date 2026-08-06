@@ -4,6 +4,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
+const errReport = require("../lib/errorReport");
 
 function register(app, { reloadClients, publicDir }) {
   app.get('/api/dev/ping', (_req, res) => res.json({ dev: true }));
@@ -26,7 +27,7 @@ function register(app, { reloadClients, publicDir }) {
       if (reloadClients.size === 0) return;
       console.log('[dev] reload · ' + (filename || '?') + ' → ' + reloadClients.size + ' client(s)');
       for (const r of reloadClients) {
-        try { r.write('event: reload\ndata: ' + Date.now() + '\n\n'); } catch {}
+        try {  r.write('event: reload\ndata: ' + Date.now() + '\n\n');  } catch (e) { errReport.report("routes_dev", "write", e); }
       }
     }, 80);
   });

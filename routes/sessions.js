@@ -7,6 +7,8 @@
 //           findCliById, spawnEnv }
 
 'use strict';
+const errReport = require('../lib/errorReport');   // Sprint 42: no silent failures
+
 
 function register(app, { asyncH, persistedSessions, webTerminal, folders, loadConfig, findCliById, spawnEnv }) {
 
@@ -88,16 +90,16 @@ function register(app, { asyncH, persistedSessions, webTerminal, folders, loadCo
       status: 'exited', pid: null, exitCode: null,
       exitedAt: Date.now(), manualStopped: true, lastActiveAt: Date.now(),
     });
-    try { require('../lib/cliActivity').releaseSession(record.id); } catch {}
+    try {  require('../lib/cliActivity').releaseSession(record.id);  } catch (e) { errReport.report("routes_sessions", "require", e); }
     res.json({ stopped, session: updated });
   }));
 
   // ---- delete ----
   // Sprint 38: token removed — frontend boosConfirm dialog is the protection.
   app.delete('/api/sessions/:id', asyncH(async (req, res) => {
-    try { webTerminal.kill(req.params.id); } catch {}
+    try {  webTerminal.kill(req.params.id);  } catch (e) { errReport.report("routes_sessions", "kill", e); }
     const removed = await persistedSessions.remove(req.params.id);
-    try { require('../lib/cliActivity').releaseSession(req.params.id); } catch {}
+    try {  require('../lib/cliActivity').releaseSession(req.params.id);  } catch (e) { errReport.report("routes_sessions", "require", e); }
     res.json({ removed });
   }));
 
@@ -123,6 +125,7 @@ function register(app, { asyncH, persistedSessions, webTerminal, folders, loadCo
     const cfg = await loadConfig();
     const editor = (cfg.editor || '').trim() || 'code';
     const { spawn } = require('node:child_process');
+    const errReport = require("../lib/errorReport");
     try {
       const child = spawn(editor, [`"${record.cwd}"`], {
         detached: true, stdio: 'ignore', shell: true,

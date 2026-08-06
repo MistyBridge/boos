@@ -19,7 +19,7 @@
 | code-analysis | 2 | codegraph, context7 |
 | productivity | 1 | notion-mcp |
 | competition | 1 | kaggle-skill |
-| agent-bus | 1 | agent-bus (BOOS 自研) |
+| agent-bus | 1 | agent-bus (BOOS 自研, Router Mode) |
 | memory-kb | 1 | openviking (自建知识库，强制加载) |
 | **合计** | **35** | |
 
@@ -89,8 +89,46 @@
 | code-analysis | **context7** | `mcps/code-analysis/context7/` |
 | productivity | **notion-mcp** | *(awaiting docs)* |
 | competition | **kaggle-skill** | `mcps/competition/kaggle-skill/` |
-| agent-bus | **agent-bus** (BOOS) | `mcps/agent-bus/` |
+| agent-bus | **agent-bus** (BOOS, Router Mode) | `mcps/agent-bus/` |
 | memory-kb | **openviking** (强制加载) | `mcps/openviking/` |
+
+---
+
+## openviking — 使用规则（Sprint 42, 2026-08-06）
+
+### 上下文检索优先级
+
+| 问题类型 | 第一动作 |
+|---------|---------|
+| 跨会话/跨 agent（"上次谁处理过 X"、"Sprint N 决策依据"、某 UID/角色） | **`recall` 优先**，命中率 95%，再查文件 |
+| 当前会话已注入的事实 | 直接用 CLAUDE.md / MEMORY.md |
+| 任务内容 / 信件全文 | agent-bus `get_task_content` |
+| recall 未命中 / 源码级细节 | 文件系统 / codegraph |
+
+执行纪律: 每次决策最多 1 次 recall；`recall` 用具体名词+领域词做 query；`max_chars` 控制返回体积；只精读前 2-3 条。有值得跨会话保留的决策 → `remember`（提取异步，不阻塞）。
+
+### 提取链状态（已修复）
+
+- 根因: 07/26 配置变更后 vlm 段 `qwen-vl-plus` → LiteLLM 路由 dashscope provider → key 被拒（401），10 天零事件
+- 修复: `ov.conf` vlm 段 = `anthropic/qwen3.7-plus` + `api_base=coding.dashscope.aliyuncs.com/apps/anthropic`（与 BOOS 共用 AI Coding 端点）
+- 已验证: 事件落地 + recall 语义召回命中
+- 仪表盘: `http://192.168.2.200:1933/studio/`
+
+---
+
+## agent-bus — Router Mode（Sprint 41）
+
+**3 个恒定工具** 替代原来的 68 个全量工具:
+
+| 工具 | 作用 |
+|------|------|
+| `check_inbox` | 非阻塞检查收件箱（无 wait 参数，事件驱动） |
+| `agent_bus_list_tools` | 按需查完整 68 工具目录 / 单工具 schema |
+| `agent_bus_call` | 调用任意 agent-bus 工具 `(tool_name, args)` |
+
+**调用模式**: 先 `agent_bus_list_tools`（或按已知工具名取 schema）→ `agent_bus_call(tool_name, args)`。工具定义段恒定 → prompt cache 前缀稳定 → 缓存命中率 97.1%（Sprint 41 核心优化）。开关: `BOOS_MCP_ROUTER_MODE=1`（默认）/ `0`（传统全量工具面）。**不要**在无必要理由时改成 0。
+
+> 完整指南: `AGENT-CONFIG-UPDATE-2026-08-06.md`（2026-08-06 · PM-A1）
 
 ---
 
