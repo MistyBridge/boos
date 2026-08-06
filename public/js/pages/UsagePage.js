@@ -1,6 +1,6 @@
 // Sprint 41: UsagePage — token usage + cache hit rate telemetry.
 // Summary cards (workspace-level) + sessions table with expandable sparklines.
-// API: GET /api/usage via fetchUsage().
+// API: GET /api/usage via fetchUsage(). Live-refreshes every 10s.
 
 import { html } from '../html.js';
 import { useEffect, useState } from 'preact/hooks';
@@ -13,15 +13,14 @@ import { PageTitleBar } from '../components/PageTitleBar.js';
 
 function fmt(num) {
   if (num == null) return '0';
-  // Exact number with locale separators — no abbreviations.
   return Math.round(num).toLocaleString();
 }
 
 function hitRateColor(rate) {
   if (rate == null) return 'var(--ink-muted)';
-  if (rate >= 80) return '#4a8a4a';
+  if (rate >= 80) return 'var(--green)';
   if (rate >= 50) return '#cc9a06';
-  return '#b73f3f';
+  return 'var(--red)';
 }
 
 function statusLabel(s) {
@@ -37,9 +36,9 @@ const SPARK_W = 300, SPARK_H = 36;
 
 function Sparkline({ series }) {
   if (!series || series.length === 0) {
-    return html`<span style="font-size:11px;color:var(--ink-muted);">无数据</span>`;
+    return html`<span class="mono" style="font-size:11px;color:var(--ink-muted);">无数据</span>`;
   }
-  const pts = series.slice(-60); // last 60 entries
+  const pts = series.slice(-60);
   const maxVal = Math.max(...pts.map((p) => Math.max(p.input || 0, p.output || 0)), 1);
   const barW = Math.max(1, (SPARK_W / pts.length) - 1);
 
@@ -60,17 +59,17 @@ function Sparkline({ series }) {
     </svg>`;
 }
 
-// ── Summary card ──────────────────────────────────────────────────
+// ── Summary card (inline style only for dynamic color + text-align) ─
 
 function SummaryCard({ label, value, sub, color }) {
   return html`
-    <div style="flex:1;min-width:120px;padding:var(--s-3);background:var(--bg-elev);border-radius:8px;border:1px solid var(--border);text-align:center;">
-      <div style="font-size:24px;font-weight:700;color:${color || 'var(--ink)'};font-variant-numeric:tabular-nums;line-height:1.2;">
+    <article class="card" style="flex:1;min-width:130px;text-align:center;">
+      <div style=${`font-size:20px;font-weight:700;color:${color || 'var(--ink)'};font-variant-numeric:tabular-nums;line-height:1.2;`}>
         ${value}
       </div>
-      <div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">${label}</div>
-      ${sub ? html`<div style="font-size:10px;color:var(--ink-muted);">${sub}</div>` : null}
-    </div>`;
+      <p class="card-meta" style="margin-top:2px;">${label}</p>
+      ${sub ? html`<p style="font-size:10px;color:var(--ink-muted);margin:0;">${sub}</p>` : null}
+    </article>`;
 }
 
 // ── Page ──────────────────────────────────────────────────────────
@@ -87,8 +86,6 @@ export function UsagePage() {
       const r = await fetchUsage();
       setData(r);
     } catch (e) {
-      // Silent refreshes don't toast — a transient failure shouldn't spam
-      // the user every 10s; the manual refresh button still surfaces errors.
       if (!silent) setToast(e.message || '加载用量数据失败', 'error');
     }
     if (!silent) setLoading(false);
@@ -96,8 +93,6 @@ export function UsagePage() {
 
   useEffect(() => {
     load();
-    // Live refresh — matches DashboardPage's 10s cadence. Usage data grows
-    // continuously while sessions run; a one-shot load goes stale fast.
     const t = setInterval(() => load({ silent: true }), 10_000);
     return () => clearInterval(t);
   }, []);
@@ -110,16 +105,16 @@ export function UsagePage() {
   return html`
     <${ErrorBoundary} name="UsagePage">
       <${PageTitleBar} title="用量监控">
-        <button class="action subtle small" onClick=${load} style="font-size:12px;padding:2px 12px;" disabled=${loading}>
+        <button class="action subtle small" onClick=${load} disabled=${loading}>
           ${loading ? '刷新中…' : '刷新'}
         </button>
       </${PageTitleBar}>
 
-      <div class="decisions-page">
-        <!-- summary cards -->
-        <div style="display:flex;gap:var(--s-2);margin-bottom:var(--s-3);flex-wrap:wrap;">
+      <div class="settings-scroll">
+        <!-- summary cards — reused .card for surface, flex for layout -->
+        <div class="row" style="gap:var(--s-2);margin-bottom:var(--s-3);flex-wrap:wrap;">
           <${SummaryCard} label="输入(未命中)" value=${fmt((ws.input || 0) + (ws.cacheCreation || 0))} color="var(--ink)" />
-          <${SummaryCard} label="输入(缓存命中)" value=${fmt(ws.cacheRead)} color="#4a8a4a" />
+          <${SummaryCard} label="输入(缓存命中)" value=${fmt(ws.cacheRead)} color="var(--green)" />
           <${SummaryCard} label="输出" value=${fmt(ws.output)} color="var(--ink)" />
           <${SummaryCard} label="缓存命中率" value=${hitRate}
             color=${hitRateColor(ws.hitRate)}
@@ -127,7 +122,6 @@ export function UsagePage() {
           <${SummaryCard} label="会话数" value=${sessions.length} color="var(--ink-mid)" />
         </div>
 
-        <!-- sessions table -->
         ${loading ? html`
           <p style="font-size:13px;color:var(--ink-muted);text-align:center;padding:var(--s-4);">加载中…</p>
         ` : null}
@@ -140,52 +134,55 @@ export function UsagePage() {
         ` : null}
 
         ${!loading && sessions.length > 0 ? html`
-          <div style="overflow-x:auto;">
-            <table style="width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;">
+          <div class="table-scroll">
+            <table class="data">
               <thead>
-                <tr style="border-bottom:2px solid var(--border);">
-                  <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">会话</th>
-                  <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">目录</th>
-                  <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">状态</th>
-                  <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">输入(未命中)</th>
-                  <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">输入(缓存命中)</th>
-                  <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">输出</th>
-                  <th style="text-align:right;padding:6px 8px;color:var(--ink-muted);font-weight:500;white-space:nowrap;">命中率</th>
+                <tr>
+                  <th>会话</th>
+                  <th class="path-cell">目录</th>
+                  <th>状态</th>
+                  <th class="num">输入(未命中)</th>
+                  <th class="num">输入(缓存命中)</th>
+                  <th class="num">输出</th>
+                  <th class="num">命中率</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody class="no-anim">
                 ${sessions.map((s) => {
                   const isExpanded = expandedId === s.id;
                   const hr = s.hitRate;
                   const hrColor = hitRateColor(hr);
                   const u = s.usage || {};
+                  const missTotal = (u.input || 0) + (u.cacheCreation || 0);
 
                   return html`
-                    <tr key=${s.id}
-                        style="border-bottom:1px solid var(--border);cursor:pointer;"
-                        onClick=${() => setExpandedId(isExpanded ? null : s.id)}
-                        onMouseEnter=${(e) => { e.currentTarget.style.background = 'var(--bg)'; }}
-                        onMouseLeave=${(e) => { e.currentTarget.style.background = ''; }}>
-                      <td style="padding:6px 8px;white-space:nowrap;">
-                        <span style="font-weight:500;">${s.cliId || '-'}</span>
+                    <tr key=${s.id} style="cursor:pointer;"
+                        onClick=${() => setExpandedId(isExpanded ? null : s.id)}>
+                      <td>
+                        <span class="row" style="gap:6px;align-items:center;">
+                          <span style="font-weight:500;">${s.cliId || '-'}</span>
+                        </span>
                       </td>
-                      <td style="padding:6px 8px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-mid);"
-                          title=${s.title || s.cwd || ''}>
+                      <td class="path-cell" title=${s.title || s.cwd || ''}>
                         ${s.title || (s.cwd || '').split(/[\\/]/).filter(Boolean).pop() || '-'}
                       </td>
-                      <td style="padding:6px 8px;white-space:nowrap;">
-                        <span style="font-size:10px;color:${s.status === 'running' ? '#4a73a5' : 'var(--ink-muted)'};">${statusLabel(s.status)}</span>
+                      <td>
+                        <span class="status-mark ${s.status === 'running' ? 'busy' : ''}"
+                              style="vertical-align:middle;margin-right:4px;" />
+                        ${statusLabel(s.status)}
                       </td>
-                      <td style="padding:6px 8px;text-align:right;white-space:nowrap;">${fmt((u.input || 0) + (u.cacheCreation || 0))}</td>
-                      <td style="padding:6px 8px;text-align:right;white-space:nowrap;">${fmt(u.cacheRead)}</td>
-                      <td style="padding:6px 8px;text-align:right;white-space:nowrap;">${fmt(u.output)}</td>
-                      <td style="padding:6px 8px;text-align:right;white-space:nowrap;font-weight:600;color:${hrColor};">
-                        ${hr != null ? hr.toFixed(1) + '%' : '—'}
+                      <td class="num">${fmt(missTotal)}</td>
+                      <td class="num">${fmt(u.cacheRead)}</td>
+                      <td class="num">${fmt(u.output)}</td>
+                      <td class="num">
+                        <span style=${`font-weight:600;color:${hrColor};`}>
+                          ${hr != null ? hr.toFixed(1) + '%' : '—'}
+                        </span>
                       </td>
                     </tr>
                     ${isExpanded ? html`
                       <tr key=${s.id + '-exp'}>
-                        <td colspan="7" style="padding:8px;">
+                        <td colspan="7" style="padding:var(--s-2) var(--s-6);">
                           <div style="font-size:11px;color:var(--ink-muted);margin-bottom:4px;">
                             最近 ${(s.series || []).slice(-60).length} 条消息的 Token 使用趋势
                             <span style="margin-left:8px;display:inline-flex;align-items:center;gap:4px;">
