@@ -93,6 +93,8 @@ function register(app, { asyncH, persistedSessions }) {
 
     const sessions = [];
     const workspace = { input: 0, cacheRead: 0, cacheCreation: 0, output: 0, msgs: 0 };
+    const workspaceRecent = { input: 0, cacheRead: 0, cacheCreation: 0, output: 0, msgs: 0 };
+    const RECENT_WINDOW = 100;   // last N messages per session — current-window stats
     let withTranscript = 0;
 
     for (const record of all) {
@@ -106,6 +108,19 @@ function register(app, { asyncH, persistedSessions }) {
       workspace.cacheCreation += total.cacheCreation;
       workspace.output += total.output;
       workspace.msgs += total.msgs;
+
+      // Recent window: last RECENT_WINDOW messages of this session.
+      const recent = series.slice(-RECENT_WINDOW).reduce((a, s) => {
+        a.input += s.input; a.cacheRead += s.cacheRead;
+        a.cacheCreation += s.cacheCreation; a.output += s.output; a.msgs++;
+        return a;
+      }, { input: 0, cacheRead: 0, cacheCreation: 0, output: 0, msgs: 0 });
+      workspaceRecent.input += recent.input;
+      workspaceRecent.cacheRead += recent.cacheRead;
+      workspaceRecent.cacheCreation += recent.cacheCreation;
+      workspaceRecent.output += recent.output;
+      workspaceRecent.msgs += recent.msgs;
+
       sessions.push({
         id: record.id,
         cliId: record.cliId,
@@ -116,6 +131,7 @@ function register(app, { asyncH, persistedSessions }) {
         projectSlug: record.projectSlug || null,
         usage: total,
         hitRate: hitRate(total),
+        recent: { ...recent, hitRate: hitRate(recent) },   // current-window stats
         series: series.slice(-60),   // last 60 messages for sparkline
       });
     }
@@ -124,7 +140,10 @@ function register(app, { asyncH, persistedSessions }) {
 
     res.json({
       generatedAt: new Date().toISOString(),
-      workspace: { ...workspace, hitRate: hitRate(workspace), sessions: withTranscript },
+      workspace: {
+        ...workspace, hitRate: hitRate(workspace), sessions: withTranscript,
+        recent: { ...workspaceRecent, hitRate: hitRate(workspaceRecent) },
+      },
       sessions,
     });
   }));
