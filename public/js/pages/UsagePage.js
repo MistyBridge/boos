@@ -35,6 +35,8 @@ function statusLabel(s) {
 const SPARK_W = 300, SPARK_H = 36;
 
 function Sparkline({ series }) {
+  const [tip, setTip] = useState(null); // { i, x, y, data }
+
   if (!series || series.length === 0) {
     return html`<span class="mono" style="font-size:11px;color:var(--ink-muted);">无数据</span>`;
   }
@@ -42,21 +44,60 @@ function Sparkline({ series }) {
   const maxVal = Math.max(...pts.map((p) => Math.max(p.input || 0, p.output || 0)), 1);
   const barW = Math.max(1, (SPARK_W / pts.length) - 1);
 
+  const timeStr = (t) => {
+    if (!t) return '';
+    try { return new Date(t).toLocaleTimeString(); } catch { return t.slice(0, 19); }
+  };
+
   return html`
-    <svg width=${SPARK_W} height=${SPARK_H} style="display:block;background:var(--bg);border-radius:4px;">
-      ${pts.map((p, i) => {
-        const inH = Math.max(1, ((p.input || 0) / maxVal) * SPARK_H);
-        const outH = Math.max(1, ((p.output || 0) / maxVal) * SPARK_H);
-        const x = i * (barW + 1);
-        return html`
-          <g key=${i}>
-            <rect x=${x} y=${SPARK_H - inH} width=${barW} height=${inH}
-                  fill="#4a73a5" opacity="0.6" rx="0.5" />
-            <rect x=${x} y=${SPARK_H - outH} width=${barW} height=${outH}
-                  fill="#b3614a" opacity="0.5" rx="0.5" />
-          </g>`;
-      })}
-    </svg>`;
+    <div style="position:relative;display:inline-block;">
+      <svg width=${SPARK_W} height=${SPARK_H} style="display:block;background:var(--bg);border-radius:4px;"
+           onMouseLeave=${() => setTip(null)}>
+        ${pts.map((p, i) => {
+          const inH = Math.max(1, ((p.input || 0) / maxVal) * SPARK_H);
+          const outH = Math.max(1, ((p.output || 0) / maxVal) * SPARK_H);
+          const x = i * (barW + 1);
+          return html`
+            <g key=${i}>
+              <rect x=${x} y=${SPARK_H - inH} width=${barW} height=${inH}
+                    fill="#4a73a5" opacity=${tip && tip.i === i ? '0.9' : '0.6'} rx="0.5" />
+              <rect x=${x} y=${SPARK_H - outH} width=${barW} height=${outH}
+                    fill="#b3614a" opacity=${tip && tip.i === i ? '0.8' : '0.5'} rx="0.5" />
+              <!-- invisible hit zone -->
+              <rect x=${x} y="0" width=${Math.max(barW, 4)} height=${SPARK_H}
+                    fill="transparent"
+                    onMouseEnter=${(e) => setTip({ i, x: e.offsetX, y: e.offsetY, data: p })}
+                    onMouseMove=${(e) => setTip({ i, x: e.offsetX, y: e.offsetY, data: p })} />
+            </g>`;
+        })}
+      </svg>
+
+      <!-- tooltip -->
+      ${tip ? html`
+        <div style=${{
+          position: 'absolute',
+          left: `${Math.min(tip.x + 12, SPARK_W - 180)}px`,
+          top: `${Math.max(tip.y - 80, 0)}px`,
+          background: 'var(--ink)',
+          color: 'var(--bg-elev)',
+          fontSize: '11px',
+          padding: '6px 10px',
+          borderRadius: '6px',
+          lineHeight: '1.5',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          zIndex: '100',
+          fontVariantNumeric: 'tabular-nums',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        }}>
+          <div style="font-weight:600;margin-bottom:2px;">${timeStr(tip.data.t)}</div>
+          <div>输入: <span style="color:#8db5e0;">${fmt(tip.data.input)}</span></div>
+          <div>缓存读: <span style="color:#8db5e0;">${fmt(tip.data.cacheRead)}</span></div>
+          <div>缓存写: <span style="color:#8db5e0;">${fmt(tip.data.cacheCreation)}</span></div>
+          <div>输出: <span style="color:#e8b4a8;">${fmt(tip.data.output)}</span></div>
+        </div>
+      ` : null}
+    </div>`;
 }
 
 // ── Summary card (inline style only for dynamic color + text-align) ─
