@@ -80,22 +80,32 @@ export function UsagePage() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (opts = {}) => {
+    const silent = opts.silent;
+    if (!silent) setLoading(true);
     try {
       const r = await fetchUsage();
       setData(r);
     } catch (e) {
-      setToast(e.message || '加载用量数据失败', 'error');
+      // Silent refreshes don't toast — a transient failure shouldn't spam
+      // the user every 10s; the manual refresh button still surfaces errors.
+      if (!silent) setToast(e.message || '加载用量数据失败', 'error');
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Live refresh — matches DashboardPage's 10s cadence. Usage data grows
+    // continuously while sessions run; a one-shot load goes stale fast.
+    const t = setInterval(() => load({ silent: true }), 10_000);
+    return () => clearInterval(t);
+  }, []);
 
   const ws = data?.workspace || {};
   const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
   const hitRate = ws.hitRate != null ? ws.hitRate.toFixed(1) + '%' : '—';
+  const recentHr = ws.recent?.hitRate != null ? ws.recent.hitRate.toFixed(1) + '%' : null;
 
   return html`
     <${ErrorBoundary} name="UsagePage">
@@ -112,7 +122,8 @@ export function UsagePage() {
           <${SummaryCard} label="输入(缓存命中)" value=${fmt(ws.cacheRead)} color="#4a8a4a" />
           <${SummaryCard} label="输出" value=${fmt(ws.output)} color="var(--ink)" />
           <${SummaryCard} label="缓存命中率" value=${hitRate}
-            color=${hitRateColor(ws.hitRate)} />
+            color=${hitRateColor(ws.hitRate)}
+            sub=${recentHr ? `最近100条: ${recentHr}` : null} />
           <${SummaryCard} label="会话数" value=${sessions.length} color="var(--ink-mid)" />
         </div>
 
