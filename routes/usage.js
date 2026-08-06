@@ -27,7 +27,9 @@ const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 // Parse a single JSONL transcript, summing usage across assistant messages.
 // Returns { counts, series } where series is per-message chronological
 // (with timestamps for trend charts).
-function parseTranscript(file, maxMsgs = 100000) {
+// maxMsgs caps the TOTAL parse (totals + series) — used to bound work on
+// huge files. seriesLimit (if > 0) keeps only the LAST seriesLimit entries.
+function parseTranscript(file, maxMsgs = 100000, seriesLimit = 0) {
   let total = { input: 0, cacheRead: 0, cacheCreation: 0, output: 0, msgs: 0 };
   const series = [];
   let lineNo = 0;
@@ -47,13 +49,20 @@ function parseTranscript(file, maxMsgs = 100000) {
       total.cacheCreation += usage.cache_creation_input_tokens || 0;
       total.output += usage.output_tokens || 0;
       total.msgs++;
-      series.push({
+      const pt = {
         t: obj.timestamp || obj.created_at || null,
         input: usage.input_tokens || 0,
         cacheRead: usage.cache_read_input_tokens || 0,
         cacheCreation: usage.cache_creation_input_tokens || 0,
         output: usage.output_tokens || 0,
-      });
+      };
+      // Rolling window: keep only the last seriesLimit entries.
+      if (seriesLimit > 0) {
+        if (series.length >= seriesLimit) series.shift();
+        series.push(pt);
+      } else {
+        series.push(pt);
+      }
     }
   } catch { /* file gone mid-read — return what we have */ }
   return { total, series };
@@ -100,7 +109,8 @@ function register(app, { asyncH, persistedSessions }) {
     for (const record of all) {
       const p = transcriptPath(record);
       if (!p) continue;
-      const { total, series } = parseTranscript(p, limit);
+      // Full parse for totals; series trimmed to RECENT_WINDOW + sparkline.
+      const { total, series } = parseTranscript(p, 1000000, 100);
       if (total.msgs === 0) continue;
       withTranscript++;
       workspace.input += total.input;

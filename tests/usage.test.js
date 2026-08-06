@@ -69,6 +69,17 @@ test('parseTranscript: respects maxMsgs cap', () => {
   assert.strictEqual(series.length, 4);
 });
 
+test('parseTranscript: seriesLimit keeps only last N (totals stay full)', () => {
+  const lines = Array.from({ length: 10 }, (_, i) =>
+    MSG({ input_tokens: i + 1, output_tokens: 1 }));
+  const file = makeTranscript(lines);
+  const { total, series } = parseTranscript(file, 100000, 3);
+  assert.strictEqual(total.msgs, 10, 'totals count ALL messages');
+  assert.strictEqual(total.input, 55, 'totals sum ALL messages');
+  assert.strictEqual(series.length, 3, 'series trimmed to window');
+  assert.strictEqual(series[2].input, 10, 'series holds the LAST entries');
+});
+
 test('parseTranscript: handles legacy top-level usage (no message wrapper)', () => {
   const file = makeTranscript([
     JSON.stringify({ type: 'assistant', usage: { input_tokens: 42, output_tokens: 3 } }),
