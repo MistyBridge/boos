@@ -49,6 +49,10 @@ function parseTranscript(file, maxMsgs = 100000, seriesLimit = 0) {
       total.cacheCreation += usage.cache_creation_input_tokens || 0;
       total.output += usage.output_tokens || 0;
       total.msgs++;
+
+      // Dedupe: Claude Code replays messages on retry, writing identical
+      // usage rows back-to-back (57% of rows were duplicates in testing).
+      // Series should show one bar per distinct event, not per retry echo.
       const pt = {
         t: obj.timestamp || obj.created_at || null,
         input: usage.input_tokens || 0,
@@ -56,6 +60,12 @@ function parseTranscript(file, maxMsgs = 100000, seriesLimit = 0) {
         cacheCreation: usage.cache_creation_input_tokens || 0,
         output: usage.output_tokens || 0,
       };
+      const last = series[series.length - 1];
+      if (last && last.input === pt.input && last.output === pt.output
+          && last.cacheRead === pt.cacheRead && last.cacheCreation === pt.cacheCreation) {
+        continue;   // exact retry echo — skip
+      }
+
       // Rolling window: keep only the last seriesLimit entries.
       if (seriesLimit > 0) {
         if (series.length >= seriesLimit) series.shift();
