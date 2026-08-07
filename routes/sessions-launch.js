@@ -160,10 +160,10 @@ function register(app, deps) {
           console.log('[boos] smart resume: inherited cliSessionId from', bestExisting.id.slice(-8), '→ new session', record.id.slice(-8));
         }
 
-        // Sprint 7: PostgreSQL resume fix — verify cliSessionId against
+        // Sprint 7 resume fix (Sprint 42: SQLite mirror) — verify cliSessionId against
         // the latest known session for this cwd in PG (the mirror store).
         try {
-          const pg = require('../lib/postgres');
+          const pg = require('../lib/sqliteStore');
           const pool = pg.getPool();
           if (pool && inheritedCliSessionId) {
             const { getLatestForCwd } = require('../lib/conversationSync');
@@ -263,11 +263,11 @@ function register(app, deps) {
       }
     }
 
-    // Sprint 7: PostgreSQL resume fix — verify cliSessionId is the latest
+    // Sprint 7 resume fix (Sprint 42: SQLite mirror) — verify cliSessionId is the latest
     // known for this cwd. If the binding scanner hasn't caught a rotation yet,
     // PG (which mirrors every JSONL write) has the freshest session id.
     try {
-      const pg = require('../lib/postgres');
+      const pg = require('../lib/sqliteStore');
       const pool = pg.getPool();
       if (pool) {
         const { getLatestForCwd } = require('../lib/conversationSync');

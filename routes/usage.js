@@ -66,10 +66,11 @@ function parseTranscript(file, maxMsgs = 100000, seriesLimit = 0, skipUsage = 0,
         try { onUsage(obj.timestamp || obj.created_at || null, usage); } catch { /* never break parse */ }
       }
 
-      // Only build series when the caller actually needs them.
-      // Callers that pass seriesLimit === 0 use onUsage for aggregation
-      // and discard the returned series — skip the work.
-      if (seriesLimit > 0) {
+      // Only build series when the caller actually needs them. Callers that
+      // pass onUsage aggregate instead and discard the returned series —
+      // skip the work. WITHOUT onUsage, series keeps its original contract:
+      // seriesLimit > 0 → rolling window, seriesLimit === 0 → full series.
+      if (!onUsage) {
         // Dedupe: Claude Code replays messages on retry, writing identical
         // usage rows back-to-back (57% of rows were duplicates in testing).
         const pt = {
@@ -82,7 +83,7 @@ function parseTranscript(file, maxMsgs = 100000, seriesLimit = 0, skipUsage = 0,
         const last = series[series.length - 1];
         if (!(last && last.input === pt.input && last.output === pt.output
             && last.cacheRead === pt.cacheRead && last.cacheCreation === pt.cacheCreation)) {
-          if (series.length >= seriesLimit) series.shift();
+          if (seriesLimit > 0 && series.length >= seriesLimit) series.shift();
           series.push(pt);
         }
       }

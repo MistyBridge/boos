@@ -31,7 +31,7 @@ set BOOS_KEEP_ALIVE=1
 echo [start] Launching BOOS on port 7780...
 echo.
 
-node server.js
+node --experimental-sqlite server.js
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
