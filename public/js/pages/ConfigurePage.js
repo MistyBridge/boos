@@ -923,5 +923,5 @@ function KeybindingsList() {
         actionLabel=${ACTIONS[recording]?.label || recording}
         onCommit=${(combo) => { setBinding(recording, combo); setRecording(null); }}
         onCancel=${() => setRecording(null)} />` : null}
-  </${ErrorBoundary}>`;
+  `;
 }
