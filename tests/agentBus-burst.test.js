@@ -155,6 +155,12 @@ describe('#82-c: 50 agents × 10 concurrent tasks (500 burst)', () => {
 
     // Register receiver.
     // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
+    // Sprint 42: only PM (supervisor) creates workspaces — seed first.
+    await registry.registerAgent({
+      name: 'burst500-pm', intro: '', workspace: 'boos-burst500',
+      role: 'supervisor', capabilities: ['burst'],
+      cliSessionId: 'burst500-pm-uid',
+    });
     const receiver = await registry.registerAgent({
       name: 'burst500-recv', intro: '', workspace: 'boos-burst500',
       role: 'worker', capabilities: ['burst'],
@@ -261,6 +267,12 @@ describe('#82-d: data integrity under concurrent operations', () => {
 
     // Register 20 sender-receiver pairs.
     // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
+    // Sprint 42: only PM (supervisor) creates workspaces — seed first.
+    await registry.registerAgent({
+      name: 'int-pm', intro: '', workspace: 'boos-burst-int',
+      role: 'supervisor', capabilities: ['burst'],
+      cliSessionId: 'int-pm-uid',
+    });
     const pairs = [];
     for (let i = 0; i < PAIRS; i++) {
       const snd = await registry.registerAgent({

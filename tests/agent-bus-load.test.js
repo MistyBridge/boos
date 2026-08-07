@@ -61,6 +61,10 @@ describe('agent-bus Sprint 23 load test (#82)', () => {
     try { fs.rmSync(DATA_DIR, { recursive: true, force: true }); } catch {}
     fs.mkdirSync(DATA_DIR, { recursive: true });
     process.env.BOOS_HOME = TEST_HOME;
+    // Sprint 42: the SSE pressure scenario opens 50 connections from one IP
+    // concurrently — the reconnect backoff (1000ms/IP) would 429 all but the
+    // first. Backoff is for reconnect storms, not connection-pressure tests.
+    process.env.BOOS_SSE_MIN_RECONNECT_INTERVAL_MS = '0';
     // Clear require cache for clean load
     delete require.cache[require.resolve('../lib/config')];
     delete require.cache[require.resolve('../lib/agentBus/store')];
@@ -830,7 +834,8 @@ describe('agent-bus Sprint 23 load test (#82)', () => {
     assert.ok(db.agents !== undefined, 'agents field present');
     assert.ok(db.tasks !== undefined, 'tasks field present');
     assert.ok(db.sessions !== undefined, 'sessions field present');
-    assert.ok(db.identity_by_boos_session !== undefined, 'identity_by_boos_session present');
+    // Sprint 33: identity_by_boos_session removed — routing lives in
+    // identity_by_mcp_session / identity_by_name_ws only.
     assert.ok(db.identity_by_mcp_session !== undefined, 'identity_by_mcp_session present');
     assert.ok(db.identity_by_name_ws !== undefined, 'identity_by_name_ws present');
 

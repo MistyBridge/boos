@@ -12,7 +12,7 @@ const path = require('node:path');
 
 let tmpBase;
 
-before(() => {
+before(async () => {
   tmpBase = path.join(os.tmpdir(), 'boos-idcard-' + Date.now().toString(36));
   fs.mkdirSync(tmpBase, { recursive: true });
   process.env.BOOS_HOME = tmpBase;
@@ -20,6 +20,13 @@ before(() => {
     '../lib/agentBus/registry', '../lib/agentBus/handlers']) {
     try { delete require.cache[require.resolve(m)]; } catch {}
   }
+  // Sprint 42 semantics: only PM (supervisor) creates workspaces — workers
+  // register into an existing one. Seed the workspace for the tests.
+  const registry = require('../lib/agentBus/registry');
+  await registry.registerAgent({
+    name: 'idcard-test-pm', intro: 'test', workspace: 'boos',
+    role: 'supervisor', cliSessionId: 'cli-pm-' + Date.now(),
+  });
 });
 
 after(() => {

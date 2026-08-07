@@ -585,13 +585,41 @@ function listenWithFallback(preferred) {
   // Crash resilience — log and attempt graceful shutdown so the next boot
   // can auto-resume managed sessions.  Without cleanup the port.lock stays
   // and active-sessions.json is never written, breaking crash-reconnect.
+  // Sprint 42: every crash log dumps a work-state snapshot so the death
+  // moment is diagnosable (PTY count, sessions, port) — no more "died with
+  // exit code 1 and zero context".
+  let bootTime = Date.now();
+  const stateSnapshot = () => {
+    try {
+      const live = (() => { try { return webTerminal.list().filter((t) => !t.exitedAt).length; } catch { return -1; } })();
+      const total = (() => { try { return webTerminal.list().length; } catch { return -1; } })();
+      return `livePTYs=${live}/${total} port=${lifecycleState.currentPort || '?'} uptime=${Math.round((Date.now() - bootTime) / 1000)}s`;
+    } catch (e) { return 'snapshot failed: ' + e.message; }
+  };
+  // Sprint 42: crash forensics — synchronous write on ANY exit path. The
+  // async console pipeline can drop the last lines when the process dies
+  // via process.exit() (buffered stderr never flushed), which made the
+  // repeated boot-injection crashes look like "no error at all". This
+  // writeFileSync cannot be lost.
+  const crashForensics = require('./lib/crashForensics');
+  process.on('exit', (code) => {
+    try {
+      require('node:fs').writeFileSync(
+        require('node:path').join(DATA_DIR, 'crash-forensics.json'),
+        JSON.stringify({ code, lastActivity: crashForensics.lastActivity(), snapshot: stateSnapshot(), ts: new Date().toISOString() }, null, 2),
+        'utf-8',
+      );
+    } catch {}
+  });
   process.on('unhandledRejection', (reason) => {
     console.error('[boos] UNHANDLED REJECTION:', reason?.message || reason);
     if (reason?.stack) console.error(reason.stack);
+    console.error('[boos] state at rejection:', stateSnapshot());
   });
   process.on('uncaughtException', (err) => {
     console.error('[boos] UNCAUGHT EXCEPTION:', err.message);
     if (err.stack) console.error(err.stack);
+    console.error('[boos] state at crash:', stateSnapshot());
     // Attempt graceful shutdown — at minimum this writes active-sessions.json
     // and removes port.lock so the next boot can cleanly take over the port
     // and auto-resume managed agent sessions.

@@ -63,6 +63,11 @@ describe('PM Identity System', () => {
     dispatch = require('../lib/agentBus/handlers').dispatch;
     registry = require('../lib/agentBus/registry');
     store = require('../lib/agentBus/store');
+    // Sprint 42 semantics: only PM (supervisor) creates workspaces — seed it.
+    await registry.registerAgent({
+      name: 'pm-seed', intro: 'seed', workspace: WS,
+      role: 'supervisor', cliSessionId: 'pm-seed-' + Date.now(),
+    });
   });
 
   after(() => {
@@ -104,17 +109,18 @@ describe('PM Identity System', () => {
       await reg(registry, { name: 'UI Agent', workspace: WS, role: 'worker', project: 'boos-ui' });
       await reg(registry, { name: 'Legacy Agent', workspace: WS, role: 'worker' });
 
-      // Without project filter: all 4 agents.
+      // Without project filter: all 5 (4 registered + seed PM from beforeEach).
       const all = store.listAgentsInWorkspace(WS);
-      assert.equal(all.length, 4);
+      assert.equal(all.length, 5);
 
-      // With project='boos-core': only core + legacy (null project).
+      // With project='boos-core': core + legacy (null project) + seed PM.
       const core = store.listAgentsInWorkspace(WS, { project: 'boos-core' });
       const coreNames = core.map(a => a.name);
       assert.ok(coreNames.includes('Core Agent'), 'core agent visible');
       assert.ok(coreNames.includes('Legacy Agent'), 'legacy agent visible');
       assert.ok(!coreNames.includes('UI Agent'), 'ui agent hidden');
       assert.ok(coreNames.includes('Supervisor'), 'supervisor visible');
+      assert.ok(coreNames.includes('pm-seed'), 'seed PM visible');
     });
   });
 

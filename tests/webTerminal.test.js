@@ -1,5 +1,18 @@
 'use strict';
 
+// Sprint 42 isolation: tests must NEVER touch the real ~/.boos data dir.
+// crashForensics (loaded by webTerminal) writes ~/.boos/crash-marker.json
+// based on BOOS_HOME — a test run without isolation would overwrite the
+// live server's crash marker (observed: marker stuck on a test's
+// pty-spawn while the real server was the one that crashed). Pin BOOS_HOME
+// to a temp dir before ANY lib require.
+const os = require('node:os');
+const path = require('node:path');
+const fs = require('node:fs');
+const TEST_HOME = path.join(os.tmpdir(), 'boos-webterminal-test-' + process.pid);
+fs.mkdirSync(path.join(TEST_HOME, '.boos'), { recursive: true });
+process.env.BOOS_HOME = TEST_HOME;
+
 // Mock node-pty before requiring webTerminal.js.
 // node-pty is a native module — we inject a fake via require.cache.
 const EventEmitter = require('node:events');
@@ -133,12 +146,14 @@ describe('webTerminal · attach + detach', () => {
     assert.equal(entry.sockets.size, 1);
   });
 
-  test('input messages are forwarded to PTY', () => {
+  test('input messages are forwarded to PTY', async () => {
     const entry = webTerminal.spawn({ command: 'test' });
     const ws = mockWs();
     webTerminal.attach(entry.id, ws);
 
     ws._trigger('message', JSON.stringify({ type: 'input', data: 'ls -la\n' }));
+    // Writes are serialized through the async queue (50ms gap) — flush it.
+    await webTerminal.flushWrites();
     assert.ok(entry.pty._written.includes('ls -la'));
   });
 

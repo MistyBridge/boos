@@ -42,6 +42,12 @@ describe('respond_task single-step completion (Sprint 20 regression)', () => {
     // Sprint 37: worker→supervisor responses enter "submitted" (PM settlement).
     // Use a worker sender so respond_task auto-completes in one step, matching
     // the Sprint 20 single-step intent without the settlement gate.
+    // Sprint 42: only PM (supervisor) creates workspaces — seed first.
+    await registry.registerAgent({
+      name: 'resp-seed-pm', intro: 'seed', workspace: 'boos',
+      role: 'supervisor', capabilities: ['test'],
+      cliSessionId: 'resp-seed-pm-uid',
+    });
     const pm = await registry.registerAgent({
       name: 'resp-pm', intro: 'sender', workspace: 'boos',
       role: 'worker', capabilities: ['test'],

@@ -8,9 +8,13 @@ echo ========================================
 echo.
 
 :: ---- Kill any process on port 7780 ----
+:: /T kills the whole process tree: without it, the old server's PTY
+:: children (claude.exe) survive and the next boot crash-reconnects
+:: the same sessions -> two claude processes per session racing on
+:: the same files -> native crash.
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":7780" ^| findstr "LISTENING" 2^>nul') do (
     echo [clean] Killing PID %%a on port 7780...
-    taskkill /PID %%a /F >nul 2>&1
+    taskkill /PID %%a /T /F >nul 2>&1
     timeout /t 2 /nobreak >nul
     echo [clean] PID %%a terminated
     echo.

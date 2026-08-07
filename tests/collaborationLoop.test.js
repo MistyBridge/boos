@@ -8,7 +8,7 @@ const os = require('node:os');
 
 let tmpBase;
 
-beforeEach(() => {
+beforeEach(async () => {
   tmpBase = path.join(os.tmpdir(), 'boos-cloop-' + Date.now().toString(36));
   fs.mkdirSync(tmpBase, { recursive: true });
   process.env.BOOS_HOME = tmpBase;
@@ -16,6 +16,12 @@ beforeEach(() => {
   try { delete require.cache[require.resolve('../lib/agentBus/store')]; } catch {}
   try { delete require.cache[require.resolve('../lib/agentBus/registry')]; } catch {}
   try { delete require.cache[require.resolve('../lib/agentBus/collaborationLoop')]; } catch {}
+  // Sprint 42 semantics: only PM (supervisor) creates workspaces — seed it.
+  const registry = require('../lib/agentBus/registry');
+  await registry.registerAgent({
+    name: 'cloop-test-pm', intro: 'test', workspace: 'boos',
+    role: 'supervisor', cliSessionId: 'cloop-pm-' + Date.now(),
+  });
 });
 
 afterEach(() => {
@@ -135,13 +141,13 @@ describe('collaborationLoop — findBestAgent (#72)', () => {
 // ── generalist agent (#72) ─────────────────────────────────────────
 
 describe('collaborationLoop — generalist (#72)', () => {
-  test('ensureGeneralistAgent registers generalist', async () => {
+  test('ensureGeneralistAgent is disabled (user decision 2026-08-06)', async () => {
     const cl = require('../lib/agentBus/collaborationLoop');
     const registry = require('../lib/agentBus/registry');
 
+    // 通用助手已彻底禁用 — send_task 无匹配时返回错误而非兜底。
     const uid = await cl.ensureGeneralistAgent(registry, 'boos');
-    assert.ok(uid);
-    assert.equal(cl.getGeneralistUid(), uid);
+    assert.equal(uid, null);
   });
 
   test('GENERALIST_NAME constant is defined', () => {

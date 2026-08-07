@@ -93,10 +93,20 @@ async function killOldInstance(port) {
     }
   } catch {}
 
-  // Force kill.
+  // Force kill — must kill the WHOLE process tree on Windows. A bare
+  // process.kill(SIGKILL) leaves the old server's PTY children (claude.exe)
+  // alive; the restarted server then crash-reconnects the same sessions and
+  // ends up with TWO claude processes per session racing on the same files
+  // → native crash. taskkill /T handles the tree.
   if (pidAlive(pid)) {
-    console.log(`boos: PID ${pid} 未响应 — 强制终止`);
-    try { process.kill(pid, 'SIGKILL'); } catch {}
+    console.log(`boos: PID ${pid} 未响应 — 强制终止 (进程树)`);
+    try {
+      if (process.platform === 'win32') {
+        require('node:child_process').execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore', timeout: 5000 });
+      } else {
+        process.kill(pid, 'SIGKILL');
+      }
+    } catch {}
     await new Promise((r) => setTimeout(r, 2000));
     if (!pidAlive(pid)) { console.log(`boos: PID ${pid} 已终止`); return true; }
     console.error(`boos: 无法终止 PID ${pid} — 请手动检查`);

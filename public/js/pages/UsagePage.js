@@ -42,7 +42,7 @@ function Sparkline({ series }) {
     return html`<span class="mono" style="font-size:11px;color:var(--ink-muted);">无数据</span>`;
   }
   const pts = series.slice(-60);
-  const maxVal = Math.max(...pts.map((p) => Math.max(p.input || 0, p.output || 0)), 1);
+  const maxVal = Math.max(...pts.map((p) => Math.max((p.input || 0) + (p.cacheCreation || 0), p.output || 0)), 1);
   const barW = Math.max(1, (SPARK_W / pts.length) - 1);
 
   const timeStr = (t) => {
@@ -55,7 +55,7 @@ function Sparkline({ series }) {
       <svg width=${SPARK_W} height=${SPARK_H} style="display:block;background:var(--bg);border-radius:4px;"
            onMouseLeave=${() => setTip(null)}>
         ${pts.map((p, i) => {
-          const inH = Math.max(1, ((p.input || 0) / maxVal) * SPARK_H);
+          const inH = Math.max(1, (((p.input || 0) + (p.cacheCreation || 0)) / maxVal) * SPARK_H);
           const outH = Math.max(1, ((p.output || 0) / maxVal) * SPARK_H);
           const x = i * (barW + 1);
           return html`
@@ -128,7 +128,7 @@ function trendTimeLabel(granularity, t) {
   const pad = (n) => String(n).padStart(2, '0');
   switch (granularity) {
     case 'minute': return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    case 'hour': return `${pad(d.getHours())}:00`;
+    case 'hour': return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:00`;
     case 'day': return `${d.getMonth() + 1}/${d.getDate()}`;
     case 'week': return `${d.getMonth() + 1}/${d.getDate()}周`;
     case 'month': return `${d.getFullYear()}/${d.getMonth() + 1}`;
@@ -194,13 +194,20 @@ function TrendSection() {
   const [gran, setGran] = useState('hour');
   const [trend, setTrend] = useState(null);
   const [loadingTrend, setLoadingTrend] = useState(false);
+  const [trendError, setTrendError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoadingTrend(true);
+    setTrendError(null);
     fetchUsageTrend(gran)
-      .then((r) => { if (!cancelled) setTrend(r); })
-      .catch((e) => { if (!cancelled) setToast(e.message || '加载趋势失败', 'error'); })
+      .then((r) => { if (!cancelled) { setTrend(r); setTrendError(null); } })
+      .catch((e) => {
+        if (!cancelled) {
+          setTrendError(e.message || '加载失败');
+          setToast(e.message || '加载趋势失败', 'error');
+        }
+      })
       .finally(() => { if (!cancelled) setLoadingTrend(false); });
     return () => { cancelled = true; };
   }, [gran]);
@@ -219,7 +226,11 @@ function TrendSection() {
         </div>
       </div>
       ${loadingTrend ? html`<p style="font-size:12px;color:var(--ink-muted);">加载中…</p>` : null}
-      ${!loadingTrend ? html`<${TimeBars} buckets=${trend?.buckets || []} granularity=${gran} />` : null}
+      ${!loadingTrend && trendError ? html`
+        <p style="font-size:12px;color:var(--red);margin:0 0 var(--s-1) 0;">${trendError}</p>
+        <button class="action subtle small" onClick=${() => setGran(gran)}>重试</button>
+      ` : null}
+      ${!loadingTrend && !trendError ? html`<${TimeBars} buckets=${trend?.buckets || []} granularity=${gran} />` : null}
     </div>`;
 }
 
