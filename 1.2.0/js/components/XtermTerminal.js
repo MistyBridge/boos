@@ -11,9 +11,18 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { ClipboardAddon } from '@xterm/addon-clipboard';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { isDarkTheme } from '../state.js';
+
+// Sprint 42 fix (remote backend over plain HTTP): the ClipboardAddon
+// intercepts Ctrl+V/C and calls navigator.clipboard.readText(), which
+// exists ONLY in secure contexts (HTTPS or localhost). On http://<LAN-IP>
+// (remote Linux backend) navigator.clipboard is undefined → the addon
+// swallows Ctrl+V and paste silently fails. Skip the addon when the
+// clipboard API is unavailable; TerminalInstance._wirePasteHandlers then
+// handles paste via the DOM paste event's clipboardData (always readable,
+// even on plain HTTP) + sends bracketed-paste to the PTY.
+const HAS_CLIPBOARD_API = typeof navigator !== 'undefined' && !!navigator.clipboard?.readText;
 
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -91,7 +100,15 @@ export class XtermTerminal {
 
     this.raw.loadAddon(this.fitAddon);
     this.raw.loadAddon(new WebLinksAddon());
-    this.raw.loadAddon(new ClipboardAddon());
+    if (HAS_CLIPBOARD_API) {
+      // Only on HTTPS/localhost — see HAS_CLIPBOARD_API comment above.
+      // Dynamic import so the addon isn't loaded (and its Ctrl+V handler
+      // installed) when navigator.clipboard is unavailable (plain HTTP).
+      import('@xterm/addon-clipboard').then((m) => {
+        if (!this.raw || this.raw.isDisposed) return;
+        try { this.raw.loadAddon(new m.ClipboardAddon()); } catch {}
+      }).catch(() => {});
+    }
     this.raw.loadAddon(this.serializeAddon);
     this._installSelectionCopyGuard();
   }
