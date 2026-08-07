@@ -19,6 +19,9 @@ function setupBoosHome() {
   for (const key of Object.keys(require.cache)) {
     if (key.includes('lib' + path.sep + 'config.js')) delete require.cache[key];
     if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'store.js')) delete require.cache[key];
+    if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'storeAgents.js')) delete require.cache[key];
+    if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'storeTasks.js')) delete require.cache[key];
+    if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'storeCore.js')) delete require.cache[key];
     if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'registry.js')) delete require.cache[key];
     if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'queue.js')) delete require.cache[key];
     if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'handlers.js')) delete require.cache[key];
@@ -50,9 +53,10 @@ describe('Agent Role (handlers.js)', () => {
     store = require('../lib/agentBus/store');
 
     // Register a supervisor.
+    // Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid.
     const sup = await registry.registerAgent({
       name: 'SupervisorBot', intro: 'I oversee', workspace: WORKSPACE,
-      role: 'supervisor',
+      role: 'supervisor', cliSessionId: 'role-sup-uid',
     });
     assert.equal(sup.ok, true);
     supervisorUid = sup.uid;
@@ -60,7 +64,7 @@ describe('Agent Role (handlers.js)', () => {
     // Register a worker.
     const wrk = await registry.registerAgent({
       name: 'WorkerBot', intro: 'I execute', workspace: WORKSPACE,
-      role: 'worker',
+      role: 'worker', cliSessionId: 'role-wrk-uid',
     });
     assert.equal(wrk.ok, true);
     workerUid = wrk.uid;
@@ -91,7 +95,8 @@ describe('Agent Role (handlers.js)', () => {
     const ctx = makeCtx(workerUid, WORKSPACE);
     const r = await dispatch('kill_worker', { target_uid: 'some_agent' }, ctx);
     assert.ok(r.error, 'should return error');
-    assert.ok(r.error.includes('supervisor role required'), `got: ${r.error}`);
+    // Sprint 38: kill_worker is ROOT-only (shutdown blacklist).
+    assert.ok(r.error.includes('ROOT (user) role required'), `got: ${r.error}`);
   });
 
   test('worker cannot add_stage to any workflow', async () => {
@@ -184,8 +189,11 @@ describe('Agent Role (handlers.js)', () => {
 
   test('agent without role field defaults to worker (backward compat)', async () => {
     // Register an agent without specifying role.
+    // Sprint 33: cliSessionId is still required (it IS the uid) — but the
+    // role field is optional and defaults to worker.
     const r = await registry.registerAgent({
       name: 'LegacyAgent', intro: '', workspace: WORKSPACE,
+      cliSessionId: 'legacy-no-role-uid',
       // No 'role' field.
     });
     assert.equal(r.ok, true);

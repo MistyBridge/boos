@@ -1,209 +1,222 @@
 {
-  "total_skills": 2419,
-  "total_repos": 78,
-  "domains": {
-    "00-root": {
-      "skills": 15,
-      "repos": 1,
-      "l2s": {}
-    },
-    "06-backend": {
-      "skills": 40,
-      "repos": 4,
-      "l2s": {
-        "02-fw": {
-          "skills": 14,
-          "repos": 1
-        },
-        "03-db": {
-          "skills": 18,
-          "repos": 2
-        },
-        "07-arch": {
-          "skills": 8,
-          "repos": 1
-        }
-      }
-    },
-    "07-cloud-sre": {
-      "skills": 6,
-      "repos": 1,
-      "l2s": {
-        "04-cloud": {
-          "skills": 6,
-          "repos": 1
-        }
-      }
-    },
-    "09-web-frontend": {
-      "skills": 88,
-      "repos": 9,
-      "l2s": {
-        "01-fw": {
-          "skills": 76,
-          "repos": 6
-        },
-        "02-style": {
-          "skills": 12,
-          "repos": 3
-        }
-      }
-    },
-    "13-llm-agent": {
-      "skills": 108,
-      "repos": 9,
-      "l2s": {
-        "01-prompt": {
-          "skills": 18,
-          "repos": 1
-        },
-        "02-agfw": {
-          "skills": 6,
-          "repos": 1
-        },
-        "03-aglife": {
-          "skills": 22,
-          "repos": 2
-        },
-        "04-rag": {
-          "skills": 3,
-          "repos": 1
-        },
-        "09-agent": {
-          "skills": 23,
-          "repos": 1
-        },
-        "12-kn": {
-          "skills": 5,
-          "repos": 1
-        },
-        "13-multimodal": {
-          "skills": 17,
-          "repos": 1
-        },
-        "14-safety": {
-          "skills": 14,
-          "repos": 1
-        }
-      }
-    },
-    "14-security": {
-      "skills": 741,
-      "repos": 11,
-      "l2s": {
-        "01-review": {
-          "skills": 87,
-          "repos": 2
-        },
-        "02-sc": {
-          "skills": 2,
-          "repos": 1
-        },
-        "03-crypto": {
-          "skills": 16,
-          "repos": 1
-        },
-        "05-def": {
-          "skills": 364,
-          "repos": 1
-        },
-        "06-sast": {
-          "skills": 19,
-          "repos": 1
-        },
-        "07-supply": {
-          "skills": 9,
-          "repos": 1
-        },
-        "08-fuzzing": {
-          "skills": 1,
-          "repos": 1
-        },
-        "10-grc": {
-          "skills": 36,
-          "repos": 1
-        },
-        "11-threat": {
-          "skills": 149,
-          "repos": 1
-        },
-        "12-identity": {
-          "skills": 58,
-          "repos": 1
-        }
-      }
-    },
-    "17-cross-domain": {
-      "skills": 550,
-      "repos": 14,
-      "l2s": {
-        "01-design": {
-          "skills": 56,
-          "repos": 1
-        },
-        "03-plan": {
-          "skills": 15,
-          "repos": 2
-        },
-        "04-workflow": {
-          "skills": 62,
-          "repos": 3
-        },
-        "06-devflow": {
-          "skills": 313,
-          "repos": 5
-        },
-        "07-quality": {
-          "skills": 52,
-          "repos": 1
-        },
-        "08-skilleng": {
-          "skills": 52,
-          "repos": 2
-        }
-      }
-    },
-    "19-academic": {
-      "skills": 431,
-      "repos": 5,
-      "l2s": {
-        "01-scicomp": {
-          "skills": 149,
-          "repos": 1
-        },
-        "02-rsch": {
-          "skills": 282,
-          "repos": 4
-        }
-      }
-    },
-    "20-other": {
-      "skills": 426,
-      "repos": 23,
-      "l2s": {
-        "01-biz": {
-          "skills": 190,
-          "repos": 10
-        },
-        "02-mkt": {
-          "skills": 154,
-          "repos": 5
-        },
-        "04-prod": {
-          "skills": 18,
-          "repos": 2
-        },
-        "05-design": {
-          "skills": 63,
-          "repos": 5
-        },
-        "08-write": {
-          "skills": 1,
-          "repos": 1
-        }
-      }
-    }
+ "total_skills": 2419,
+ "total_repos": 78,
+ "domains": {
+  "00-root": {
+   "skills": 15,
+   "repos": 1,
+   "l2s": {}
   },
-  "generated": "2026-07-20",
-  "l3_unit": "repo"
+  "06-backend": {
+   "skills": 40,
+   "repos": 4,
+   "l2s": {
+    "02-fw": {
+     "skills": 14,
+     "repos": 1
+    },
+    "03-db": {
+     "skills": 18,
+     "repos": 2
+    },
+    "07-arch": {
+     "skills": 8,
+     "repos": 1
+    }
+   }
+  },
+  "07-cloud-sre": {
+   "skills": 6,
+   "repos": 1,
+   "l2s": {
+    "04-cloud": {
+     "skills": 6,
+     "repos": 1
+    }
+   }
+  },
+  "09-web-frontend": {
+   "skills": 88,
+   "repos": 9,
+   "l2s": {
+    "01-fw": {
+     "skills": 76,
+     "repos": 6
+    },
+    "02-style": {
+     "skills": 12,
+     "repos": 3
+    }
+   }
+  },
+  "13-llm-agent": {
+   "skills": 108,
+   "repos": 9,
+   "l2s": {
+    "01-prompt": {
+     "skills": 18,
+     "repos": 1
+    },
+    "02-agfw": {
+     "skills": 6,
+     "repos": 1
+    },
+    "03-aglife": {
+     "skills": 22,
+     "repos": 2
+    },
+    "04-rag": {
+     "skills": 3,
+     "repos": 1
+    },
+    "09-agent": {
+     "skills": 23,
+     "repos": 1
+    },
+    "12-kn": {
+     "skills": 5,
+     "repos": 1
+    },
+    "13-multimodal": {
+     "skills": 17,
+     "repos": 1
+    },
+    "14-safety": {
+     "skills": 14,
+     "repos": 1
+    }
+   }
+  },
+  "14-security": {
+   "skills": 741,
+   "repos": 11,
+   "l2s": {
+    "01-review": {
+     "skills": 87,
+     "repos": 2
+    },
+    "02-sc": {
+     "skills": 2,
+     "repos": 1
+    },
+    "03-crypto": {
+     "skills": 16,
+     "repos": 1
+    },
+    "05-def": {
+     "skills": 364,
+     "repos": 1
+    },
+    "06-sast": {
+     "skills": 19,
+     "repos": 1
+    },
+    "07-supply": {
+     "skills": 9,
+     "repos": 1
+    },
+    "08-fuzzing": {
+     "skills": 1,
+     "repos": 1
+    },
+    "10-grc": {
+     "skills": 36,
+     "repos": 1
+    },
+    "11-threat": {
+     "skills": 149,
+     "repos": 1
+    },
+    "12-identity": {
+     "skills": 58,
+     "repos": 1
+    }
+   }
+  },
+  "17-cross-domain": {
+   "skills": 550,
+   "repos": 14,
+   "l2s": {
+    "01-design": {
+     "skills": 56,
+     "repos": 1
+    },
+    "03-plan": {
+     "skills": 15,
+     "repos": 2
+    },
+    "04-workflow": {
+     "skills": 62,
+     "repos": 3
+    },
+    "06-devflow": {
+     "skills": 313,
+     "repos": 5
+    },
+    "07-quality": {
+     "skills": 52,
+     "repos": 1
+    },
+    "08-skilleng": {
+     "skills": 52,
+     "repos": 2
+    }
+   }
+  },
+  "19-academic": {
+   "skills": 431,
+   "repos": 5,
+   "l2s": {
+    "01-scicomp": {
+     "skills": 149,
+     "repos": 1
+    },
+    "02-rsch": {
+     "skills": 282,
+     "repos": 4
+    }
+   }
+  },
+  "20-other": {
+   "skills": 426,
+   "repos": 23,
+   "l2s": {
+    "01-biz": {
+     "skills": 190,
+     "repos": 10
+    },
+    "02-mkt": {
+     "skills": 154,
+     "repos": 5
+    },
+    "04-prod": {
+     "skills": 18,
+     "repos": 2
+    },
+    "05-design": {
+     "skills": 63,
+     "repos": 5
+    },
+    "08-write": {
+     "skills": 1,
+     "repos": 1
+    }
+   }
+  }
+ },
+ "generated": "2026-07-20",
+ "l3_unit": "repo",
+ "docs": {
+  "AGENT-CONFIG-UPDATE-2026-08-06": {
+   "path": "AGENT-CONFIG-UPDATE-2026-08-06.md",
+   "author": "PM-A1",
+   "type": "config-guide",
+   "subjects": [
+    "openviking",
+    "agent-bus router mode",
+    "recall priority"
+   ],
+   "added": "2026-08-06"
+  }
+ }
 }

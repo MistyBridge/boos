@@ -18,12 +18,29 @@ function setupBoosHome() {
   for (const key of Object.keys(require.cache)) {
     if (key.includes('lib' + path.sep + 'config.js')) delete require.cache[key];
     if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'store.js')) delete require.cache[key];
+    if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'storeAgents.js')) delete require.cache[key];
+    if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'storeTasks.js')) delete require.cache[key];
+    if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'storeCore.js')) delete require.cache[key];
+    if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'storeIdentity.js')) delete require.cache[key];
     if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'registry.js')) delete require.cache[key];
     if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'queue.js')) delete require.cache[key];
     if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'handlers.js')) delete require.cache[key];
+    if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'handlersAdmin.js')) delete require.cache[key];
+    if (key.includes('lib' + path.sep + 'agentBus' + path.sep + 'auth.js')) delete require.cache[key];
     if (key.includes('lib' + path.sep + 'atomicJson.js')) delete require.cache[key];
   }
   return dir;
+}
+
+// Sprint 33: cliSessionId (Claude --resume UUID) is the agent uid and is
+// REQUIRED by registerAgent. This wrapper injects a unique one so tests can
+// register agents without repeating the boilerplate.
+let _regSeq = 0;
+function reg(registry, opts) {
+  return registry.registerAgent({
+    ...opts,
+    cliSessionId: opts.cliSessionId || ('pm-test-' + (++_regSeq) + '-' + Date.now().toString(36)),
+  });
 }
 
 function teardownBoosHome(dir) {
@@ -46,6 +63,11 @@ describe('PM Identity System', () => {
     dispatch = require('../lib/agentBus/handlers').dispatch;
     registry = require('../lib/agentBus/registry');
     store = require('../lib/agentBus/store');
+    // Sprint 42 semantics: only PM (supervisor) creates workspaces — seed it.
+    await registry.registerAgent({
+      name: 'pm-seed', intro: 'seed', workspace: WS,
+      role: 'supervisor', cliSessionId: 'pm-seed-' + Date.now(),
+    });
   });
 
   after(() => {
@@ -82,22 +104,23 @@ describe('PM Identity System', () => {
 
     test('listAgentsInWorkspace with project filter', async () => {
       // Seed DB via registry to ensure proper initialization.
-      await await registry.registerAgent({ name: 'Supervisor', workspace: WS, role: 'supervisor' });
-      await await registry.registerAgent({ name: 'Core Agent', workspace: WS, role: 'worker', project: 'boos-core' });
-      await await registry.registerAgent({ name: 'UI Agent', workspace: WS, role: 'worker', project: 'boos-ui' });
-      await await registry.registerAgent({ name: 'Legacy Agent', workspace: WS, role: 'worker' });
+      await reg(registry, { name: 'Supervisor', workspace: WS, role: 'supervisor' });
+      await reg(registry, { name: 'Core Agent', workspace: WS, role: 'worker', project: 'boos-core' });
+      await reg(registry, { name: 'UI Agent', workspace: WS, role: 'worker', project: 'boos-ui' });
+      await reg(registry, { name: 'Legacy Agent', workspace: WS, role: 'worker' });
 
-      // Without project filter: all 4 agents.
+      // Without project filter: all 5 (4 registered + seed PM from beforeEach).
       const all = store.listAgentsInWorkspace(WS);
-      assert.equal(all.length, 4);
+      assert.equal(all.length, 5);
 
-      // With project='boos-core': only core + legacy (null project).
+      // With project='boos-core': core + legacy (null project) + seed PM.
       const core = store.listAgentsInWorkspace(WS, { project: 'boos-core' });
       const coreNames = core.map(a => a.name);
       assert.ok(coreNames.includes('Core Agent'), 'core agent visible');
       assert.ok(coreNames.includes('Legacy Agent'), 'legacy agent visible');
       assert.ok(!coreNames.includes('UI Agent'), 'ui agent hidden');
       assert.ok(coreNames.includes('Supervisor'), 'supervisor visible');
+      assert.ok(coreNames.includes('pm-seed'), 'seed PM visible');
     });
   });
 
@@ -105,7 +128,7 @@ describe('PM Identity System', () => {
 
   describe('registry.js — registerAgent with project', () => {
     test('registerAgent with project field', async () => {
-      const r = await await registry.registerAgent({
+      const r = await reg(registry, {
         name: 'Core Dev',
         workspace: WS,
         role: 'worker',
@@ -120,7 +143,7 @@ describe('PM Identity System', () => {
     });
 
     test('registerAgent without project (legacy)', async () => {
-      const r = await registry.registerAgent({
+      const r = await reg(registry, {
         name: 'Legacy Dev',
         workspace: WS,
       });
@@ -131,13 +154,13 @@ describe('PM Identity System', () => {
     });
 
     test('reconnect with project updates from null', async () => {
-      const r1 = await registry.registerAgent({
+      const r1 = await reg(registry, {
         name: 'Upgradable Agent',
         workspace: WS,
       });
       assert.equal(r1.reconnected, false);
 
-      const r2 = await registry.registerAgent({
+      const r2 = await reg(registry, {
         name: 'Upgradable Agent',
         workspace: WS,
         project: 'boos-core',
@@ -150,8 +173,8 @@ describe('PM Identity System', () => {
 
     test('setProjectPM — supervisor sets PM', async () => {
       // Register supervisor and worker.
-      const sup = await registry.registerAgent({ name: 'Sup', workspace: WS, role: 'supervisor' });
-      const worker = await registry.registerAgent({ name: 'Worker', workspace: WS, role: 'worker' });
+      const sup = await reg(registry, { name: 'Sup', workspace: WS, role: 'supervisor' });
+      const worker = await reg(registry, { name: 'Worker', workspace: WS, role: 'worker' });
 
       const r = await registry.setProjectPM(worker.uid, ['boos-core', 'boos-ui'], sup.uid);
       assert.equal(r.ok, true);
@@ -162,8 +185,8 @@ describe('PM Identity System', () => {
     });
 
     test('setProjectPM — non-supervisor cannot set PM', async () => {
-      const worker1 = await registry.registerAgent({ name: 'W1', workspace: WS, role: 'worker' });
-      const worker2 = await registry.registerAgent({ name: 'W2', workspace: WS, role: 'worker' });
+      const worker1 = await reg(registry, { name: 'W1', workspace: WS, role: 'worker' });
+      const worker2 = await reg(registry, { name: 'W2', workspace: WS, role: 'worker' });
 
       const r = await registry.setProjectPM(worker2.uid, ['boos-core'], worker1.uid);
       assert.equal(r.ok, false);
@@ -171,12 +194,12 @@ describe('PM Identity System', () => {
 
     test('assignToProject — PM can assign within own project', async () => {
       // Register supervisor.
-      const sup = await registry.registerAgent({ name: 'Sup', workspace: WS, role: 'supervisor' });
+      const sup = await reg(registry, { name: 'Sup', workspace: WS, role: 'supervisor' });
       // Create PM with project scope.
-      const pm = await registry.registerAgent({ name: 'PM', workspace: WS, role: 'worker' });
+      const pm = await reg(registry, { name: 'PM', workspace: WS, role: 'worker' });
       await registry.setProjectPM(pm.uid, ['boos-core'], sup.uid);
       // Create worker.
-      const worker = await registry.registerAgent({ name: 'W3', workspace: WS, role: 'worker' });
+      const worker = await reg(registry, { name: 'W3', workspace: WS, role: 'worker' });
 
       const r = await registry.assignToProject(worker.uid, 'boos-core', pm.uid);
       assert.equal(r.ok, true);
@@ -187,8 +210,8 @@ describe('PM Identity System', () => {
     });
 
     test('assignToProject — non-PM cannot assign', async () => {
-      const w1 = await registry.registerAgent({ name: 'W4', workspace: WS, role: 'worker' });
-      const w2 = await registry.registerAgent({ name: 'W5', workspace: WS, role: 'worker' });
+      const w1 = await reg(registry, { name: 'W4', workspace: WS, role: 'worker' });
+      const w2 = await reg(registry, { name: 'W5', workspace: WS, role: 'worker' });
 
       const r = await registry.assignToProject(w2.uid, 'boos-core', w1.uid);
       assert.equal(r.ok, false);
@@ -199,17 +222,17 @@ describe('PM Identity System', () => {
 
   describe('handlers.js — PM permissions', () => {
     test('set_pm handler: supervisor can set PM', async () => {
-      const sup = await registry.registerAgent({ name: 'Sup', workspace: WS, role: 'supervisor' });
-      const worker = await registry.registerAgent({ name: 'Worker', workspace: WS, role: 'worker' });
+      const sup = await reg(registry, { name: 'Sup', workspace: WS, role: 'supervisor' });
+      const worker = await reg(registry, { name: 'Worker', workspace: WS, role: 'worker' });
       const ctx = makeCtx(sup.uid, WS);
 
       const result = await dispatch('set_pm', { target_uid: worker.uid, projects: ['boos-core'] }, ctx);
-      assert.equal(result.ok, true);
+      assert.equal(result.ok, true, 'set_pm failed: ' + JSON.stringify(result));
     });
 
     test('set_pm handler: worker cannot set PM', async () => {
-      const w1 = await registry.registerAgent({ name: 'W6', workspace: WS, role: 'worker' });
-      const w2 = await registry.registerAgent({ name: 'W7', workspace: WS, role: 'worker' });
+      const w1 = await reg(registry, { name: 'W6', workspace: WS, role: 'worker' });
+      const w2 = await reg(registry, { name: 'W7', workspace: WS, role: 'worker' });
       const ctx = makeCtx(w1.uid, WS);
 
       const result = await dispatch('set_pm', { target_uid: w2.uid, projects: ['boos-core'] }, ctx);
@@ -217,20 +240,20 @@ describe('PM Identity System', () => {
     });
 
     test('assign_to_project handler: PM can assign to own project', async () => {
-      const sup = await registry.registerAgent({ name: 'Sup', workspace: WS, role: 'supervisor' });
-      const pm = await registry.registerAgent({ name: 'PM', workspace: WS, role: 'worker' });
+      const sup = await reg(registry, { name: 'Sup', workspace: WS, role: 'supervisor' });
+      const pm = await reg(registry, { name: 'PM', workspace: WS, role: 'worker' });
       await dispatch('set_pm', { target_uid: pm.uid, projects: ['boos-core'] }, makeCtx(sup.uid, WS));
-      const worker = await registry.registerAgent({ name: 'W8', workspace: WS, role: 'worker' });
+      const worker = await reg(registry, { name: 'W8', workspace: WS, role: 'worker' });
 
       const result = await dispatch('assign_to_project', { target_uid: worker.uid, project: 'boos-core' }, makeCtx(pm.uid, WS));
       assert.equal(result.ok, true);
     });
 
     test('send_task: cross-project isolation', async () => {
-      const sup = await registry.registerAgent({ name: 'Sup', workspace: WS, role: 'supervisor' });
+      const sup = await reg(registry, { name: 'Sup', workspace: WS, role: 'supervisor' });
       // Create agents in different projects.
-      const coreAgent = await registry.registerAgent({ name: 'Core', workspace: WS, role: 'worker', project: 'boos-core' });
-      const uiAgent = await registry.registerAgent({ name: 'UI', workspace: WS, role: 'worker', project: 'boos-ui' });
+      const coreAgent = await reg(registry, { name: 'Core', workspace: WS, role: 'worker', project: 'boos-core' });
+      const uiAgent = await reg(registry, { name: 'UI', workspace: WS, role: 'worker', project: 'boos-ui' });
 
       // Core agent tries to send to UI agent — should fail.
       const result = await dispatch('send_task', {
@@ -243,8 +266,8 @@ describe('PM Identity System', () => {
     });
 
     test('send_task: same-project works', async () => {
-      const core1 = await registry.registerAgent({ name: 'Core1', workspace: WS, role: 'worker', project: 'boos-core' });
-      const core2 = await registry.registerAgent({ name: 'Core2', workspace: WS, role: 'worker', project: 'boos-core' });
+      const core1 = await reg(registry, { name: 'Core1', workspace: WS, role: 'worker', project: 'boos-core' });
+      const core2 = await reg(registry, { name: 'Core2', workspace: WS, role: 'worker', project: 'boos-core' });
 
       const result = await dispatch('send_task', {
         to_uid: core2.uid,
@@ -256,9 +279,9 @@ describe('PM Identity System', () => {
     });
 
     test('send_task: supervisor can cross projects', async () => {
-      const sup = await registry.registerAgent({ name: 'Sup', workspace: WS, role: 'supervisor' });
-      const core = await registry.registerAgent({ name: 'Core3', workspace: WS, role: 'worker', project: 'boos-core' });
-      const ui = await registry.registerAgent({ name: 'UI2', workspace: WS, role: 'worker', project: 'boos-ui' });
+      const sup = await reg(registry, { name: 'Sup', workspace: WS, role: 'supervisor' });
+      const core = await reg(registry, { name: 'Core3', workspace: WS, role: 'worker', project: 'boos-core' });
+      const ui = await reg(registry, { name: 'UI2', workspace: WS, role: 'worker', project: 'boos-ui' });
 
       const result = await dispatch('send_task', {
         to_uid: ui.uid,
@@ -270,11 +293,11 @@ describe('PM Identity System', () => {
 
     test('list_agents: project-scope filtering', async () => {
       // Register agents with different projects.
-      await registry.registerAgent({ name: 'LegacyA', workspace: WS, role: 'worker' });
-      await registry.registerAgent({ name: 'CoreA', workspace: WS, role: 'worker', project: 'boos-core' });
-      await registry.registerAgent({ name: 'UIA', workspace: WS, role: 'worker', project: 'boos-ui' });
+      await reg(registry, { name: 'LegacyA', workspace: WS, role: 'worker' });
+      await reg(registry, { name: 'CoreA', workspace: WS, role: 'worker', project: 'boos-core' });
+      await reg(registry, { name: 'UIA', workspace: WS, role: 'worker', project: 'boos-ui' });
 
-      const coreDev = await registry.registerAgent({ name: 'CoreDev', workspace: WS, role: 'worker', project: 'boos-core' });
+      const coreDev = await reg(registry, { name: 'CoreDev', workspace: WS, role: 'worker', project: 'boos-core' });
 
       const result = await dispatch('list_agents', {}, makeCtx(coreDev.uid, WS));
       const names = result.agents.map(a => a.name);
@@ -287,10 +310,10 @@ describe('PM Identity System', () => {
     });
 
     test('broadcast: project scope', async () => {
-      const coreDev = await registry.registerAgent({ name: 'CoreBcast', workspace: WS, role: 'worker', project: 'boos-core' });
+      const coreDev = await reg(registry, { name: 'CoreBcast', workspace: WS, role: 'worker', project: 'boos-core' });
       // Register another core agent to receive.
-      await registry.registerAgent({ name: 'CoreBcast2', workspace: WS, role: 'worker', project: 'boos-core' });
-      await registry.registerAgent({ name: 'UIBcast', workspace: WS, role: 'worker', project: 'boos-ui' });
+      await reg(registry, { name: 'CoreBcast2', workspace: WS, role: 'worker', project: 'boos-core' });
+      await reg(registry, { name: 'UIBcast', workspace: WS, role: 'worker', project: 'boos-ui' });
 
       // FIX: The broadcast function calls sendTask which checks for self-send.
       // When broadcasting from CoreBcast to [CoreBcast, CoreBcast2, UIBcast],
@@ -314,8 +337,8 @@ describe('PM Identity System', () => {
 
   describe('backward compatibility', () => {
     test('legacy agents (no project) can interact freely', async () => {
-      const w1 = await registry.registerAgent({ name: 'Legacy1', workspace: WS, role: 'worker' });
-      const w2 = await registry.registerAgent({ name: 'Legacy2', workspace: WS, role: 'worker' });
+      const w1 = await reg(registry, { name: 'Legacy1', workspace: WS, role: 'worker' });
+      const w2 = await reg(registry, { name: 'Legacy2', workspace: WS, role: 'worker' });
 
       const result = await dispatch('send_task', {
         to_uid: w2.uid,
@@ -326,8 +349,8 @@ describe('PM Identity System', () => {
     });
 
     test('agent with project can send to legacy agent', async () => {
-      const core = await registry.registerAgent({ name: 'CoreLegacy', workspace: WS, role: 'worker', project: 'boos-core' });
-      const legacy = await registry.registerAgent({ name: 'Legacy3', workspace: WS, role: 'worker' });
+      const core = await reg(registry, { name: 'CoreLegacy', workspace: WS, role: 'worker', project: 'boos-core' });
+      const legacy = await reg(registry, { name: 'Legacy3', workspace: WS, role: 'worker' });
 
       const result = await dispatch('send_task', {
         to_uid: legacy.uid,
@@ -338,7 +361,7 @@ describe('PM Identity System', () => {
     });
 
     test('listAgents returns project field', async () => {
-      await registry.registerAgent({ name: 'WithProject', workspace: WS, role: 'worker', project: 'boos-core' });
+      await reg(registry, { name: 'WithProject', workspace: WS, role: 'worker', project: 'boos-core' });
       const all = store.listAgentsInWorkspace(WS);
       const wp = all.find(a => a.name === 'WithProject');
       assert.equal(wp.project, 'boos-core');

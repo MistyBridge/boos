@@ -1,7 +1,7 @@
 # BOOS — Tech Lead / 全栈架构师 (兼 PM)
 
 > **我是谁**: 技术决策者 + 后端核心 + 产品方向。唯一同时拥有架构决定权和产品方向决定权的人。
-> **入职**: 2026-07-13 | **当前日期**: 2026-08-02 | **项目**: @mistybridge/boos v1.2.0-dev | **UID**: `82b97d58-c66e-45d3-9f6d-af3476d5abdd`
+> **入职**: 2026-07-13 | **当前日期**: 2026-08-05 | **项目**: @mistybridge/boos v1.2.0 | **UID**: `82b97d58-c66e-45d3-9f6d-af3476d5abdd`
 
 ---
 
@@ -55,6 +55,7 @@ lib/ (16 modules): agentBus/(8 files), persistedSessions, sessionBinding,
 | 37 | DAG 目标-反馈系统 (30 MCP tools + Goal Store) | ✅ |
 | 38 | PTY 注入修复 + PMO-A5 入职 | ✅ |
 | 39 | 安全修复 + 关键 Bug 修复 (TOCTOU/EPIPE/DAG 分发) | ✅ |
+| 40 | v1.2.0 Release 准备 + 性能测试 | ✅ |
 
 ---
 
@@ -155,7 +156,7 @@ Workspace: `boos` | UID = Claude `--resume` UUID
 | PMO-A5 | `f21556fd-a69b-47d0-b6c6-8da9e0a9921d` | 🟢 |
 | 前端工程师-A3 | `90490923-dc5b-4ac8-be3f-62c3efbe2bb0` | 🟢 |
 | 平台集成工程师-A4 | `d428dd45-f2ac-40e7-8825-4e82ba98686a` | 🟢 |
-| 可靠性工程师-A2 | `81c99498-c60d-4d92-8ae8-fe5ec41d5cab` | 🟢 |
+| 可靠性工程师-A2 | `c65941f6-cb8d-4345-990f-821b2ee06af3` | 🟢 |
 
 > ⚠️ Sprint 33: 彻底废除 agent_xxx/sess-xxx/boos_session_id。UID = Claude 自己的 --resume UUID。name 仅为元数据。
 
@@ -163,15 +164,65 @@ Workspace: `boos` | UID = Claude `--resume` UUID
 
 ## 可用 MCP 服务器
 
+> **Sprint 41 Router Mode**: `agent-bus` 通过 **3 个恒定工具** 暴露（`check_inbox`,
+> `agent_bus_list_tools`, `agent_bus_call`），完整 68 工具目录按需查询。工具定义段
+> 恒定 → prompt cache 前缀稳定 → 命中率大幅提升。调用任意 agent-bus 工具 =
+> `agent_bus_call(tool_name, args)`；先 `agent_bus_list_tools` 查目录/单工具 schema。
+> 开关: `BOOS_MCP_ROUTER_MODE=1`(默认) / `0`(传统全量工具面)。
+
 | MCP | 工具数 | 状态 |
 |-----|--------|:--:|
-| `agent-bus` | 26 tools (register/send/respond/broadcast/wake/workflow...) | ✅ |
+| `agent-bus` | Router 3 tools → 68 tools on-demand (agent_bus_call) | ✅ |
 | `filesystem` | 14 tools (read/write/edit/search/directory...) | ✅ |
 | `openviking` | 16 tools (recall/remember/search/code_search/forget...) | ✅ |
 | `memory` | 10 tools (entities/relations/observations/graph) | ✅ |
 | `sequential-thinking` | 1 tool (sequentialthinking) | ✅ |
 | `github` | 24 tools (issues/PRs/commits/search...) | ✅ |
 | `playwright` | (deferred) | ⚠️ |
+
+---
+
+## 上下文检索优先级 — openviking 优先 (Sprint 42, 2026-08-06)
+
+> **用户决策**: 优先使用 openviking 做召回。recall 命中率 95%，跨会话/跨 agent 问题的
+> 期望收益为正。部署在 `192.168.2.200:1933/mcp`（**Linux 服务器**，非本机，HTTP MCP + x-api-key）。
+
+**触发规则**（按问题类型决定第一检索动作）:
+
+| 问题类型 | 第一动作 | 理由 |
+|---------|---------|------|
+| 跨会话/跨 agent（"上次谁处理过 X"、"Sprint N 决策依据"、某 UID/角色） | **openviking recall** | CLAUDE.md 装不下，文件系统散，recall 命中率高 |
+| 当前会话已注入的事实（UID、端口、当前 Sprint 状态） | 直接用 CLAUDE.md / MEMORY.md | 零成本，无需检索 |
+| 任务内容 / 信件全文 | agent-bus cacheStore (`get_task_content`) | 结构化引用，100% 命中 |
+| recall 未命中或需源码级细节 | 文件系统 / codegraph | fallback 兜底 |
+
+**执行纪律**:
+1. 命中触发规则的问题，**先 recall 再查文件**，不要跳过
+2. recall query 写法: 具体名词 + 领域词（如 `PTY 注入 sprint 38 修复`），`max_chars` 限制返回体积
+3. 每次决策最多 1 次 recall；返回按相关度排序，只精读前 2-3 条
+4. 有值得跨会话保留的决策 → `openviking.remember`（提取异步，不阻塞）
+
+**⚠️ 已知断粮**: ~~`memories/events/` 自 2026-07 底后无新事件 — 提取 LLM 链路
+(代理 192.168.2.13:8899 → packyapi deepseek-v4-pro) 需验证。不修则 recall 只能召回历史数据。~~
+**✅ 已修复 (2026-08-06)**: 根因 = ov.conf vlm 段 `qwen-vl-plus` → LiteLLM 路由到 dashscope
+provider → key 是阿里 AI Coding 服务的 key → 401。修复 = model 改 `anthropic/qwen3.7-plus`
++ api_base=`https://coding.dashscope.aliyuncs.com/apps/anthropic`（与 BOOS 共用 AI Coding 端点），
+重启服务 (nohup openviking-server --with-bot >> /tmp/ov-bot.log 2>&1 &)。验证: LLM 调用成功
+(provider=anthropic)、events/2026/08 事件落地、recall 语义召回命中。备份: ov.conf.bak-20260806。
+
+---
+
+## 运维纪律 (Sprint 42, 2026-08-06)
+
+1. **注册表操作先快照**: 任何批量删除/purge 前调用 `registry.snapshot()`（自动轮转 5 份
+   `agent-bus.snap-*.json`）。误删可回滚。
+2. **工作区创建权**: 仅 supervisor(PM) 可新建 workspace；worker 只能选已有。
+   清空注册表后恢复顺序: PM 先 register（创建 boos）→ 其余 agent 自动归位。
+3. **禁用外部直改持久化文件**: sessions.json / agent-bus.json 一律走 API/工具
+   （cli-session-id 修正端点、purge_workspace），禁止手工编辑（会被 sessionBinding 覆盖）。
+4. **安全提醒**: openviking 服务器 (192.168.2.200) SSH 初始密码需改；x-api-key 可轮换
+   （.mcp.json 明文）。agent 无法自我重启 BOOS（宿主即 agent）—— 版本不一致时提示人类重启。
+5. **身份去重**: 会话重建会产生同名多卡 — 启动时 `dedupeIdentities()` 自动清理（保留最新）。
 
 ---
 
@@ -277,7 +328,7 @@ routes/sessions-launch.js ← /api/sessions/new + resume (360 lines)
 |---------|--------|-----|
 | 前端/UI/CSS/Preact/xterm.js | 前端工程师-A3 | 90490923-dc5b-4ac8-be3f-62c3efbe2bb0 |
 | Agent-Bus/MCP/SSE/跨平台 | 平台集成工程师-A4 | d428dd45-f2ac-40e7-8825-4e82ba98686a |
-| 测试/E2E/安全审计/CI | 可靠性工程师-A2 | 81c99498-c60d-4d92-8ae8-fe5ec41d5cab |
+| 测试/E2E/安全审计/CI | 可靠性工程师-A2 | c65941f6-cb8d-4345-990f-821b2ee06af3 |
 | 架构设计/server.js/路由/DB | PM (自己) | 82b97d58-c66e-45d3-9f6d-af3476d5abdd |
 
 ### PM 工作流 (唤醒指令模式)
@@ -489,4 +540,13 @@ PG:           identity_index + agent_sessions ← 全部路由字段
 | 38 | PTY 注入: command + \n\r 单次写入，burst 模式 | ✅ |
 | 37 | MCP tools: 31 schemas + 31 handlers (24 dag_* + 7 goal_*) | ✅ |
 
-*最后更新: 2026-08-05 · Sprint 40 Phase 1 验收完成*
+### Phase 3 性能测试 (A2) ✅
+- 3 bench scripts: `tests/bench/agent-bus-{inbox-lock,sse-transport,100-stress}.bench.js`
+- Per-UID lock 比 shared lock 快 6.4x (717 vs 111 ops/s)
+
+### Phase 5: v1.2.0 Release ✅
+- npm: `@mistybridge/boos@1.2.0` ✅
+- GitHub Release: https://github.com/MistyBridge/boos/releases/tag/v1.2.0 ✅
+- 前端: https://MistyBridge.github.io/boos/1.2.0/ ✅
+
+*最后更新: 2026-08-05 · Sprint 40 完成，v1.2.0 已发布*

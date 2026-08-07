@@ -13,6 +13,8 @@
 //           codexThemeArgs, getState, pkg, os, path }
 
 'use strict';
+const errReport = require('../lib/errorReport');   // Sprint 42: no silent failures
+
 
 function register(app, deps) {
   const {
@@ -112,7 +114,7 @@ function register(app, deps) {
           try {
             const raw = await require('node:fs/promises').readFile(mcpPath, 'utf-8');
             existing = JSON.parse(raw);
-          } catch {}
+          } catch (e) { errReport.report("routes_sessions-launch", "parse", e); }
           // Compute sandbox-aware filesystem config.
           const sandbox = require('../lib/sandbox');
           const fsConfig = await sandbox.getFilesystemMcpConfig({ folderId: req.body && req.body.folderId });
@@ -137,7 +139,7 @@ function register(app, deps) {
       // Inject BOOS collaboration prompt (non-blocking).
       let promptExtraArgs = [];
       if (shouldLaunch) {
-        try { promptExtraArgs = require('../lib/supervisorPrompt').getBasePromptCliArgs(); } catch {}
+        try {  promptExtraArgs = require('../lib/supervisorPrompt').getBasePromptCliArgs();  } catch (e) { errReport.report("routes_sessions-launch", "require", e); }
       }
 
       let launched = null;
@@ -158,10 +160,10 @@ function register(app, deps) {
           console.log('[boos] smart resume: inherited cliSessionId from', bestExisting.id.slice(-8), '→ new session', record.id.slice(-8));
         }
 
-        // Sprint 7: PostgreSQL resume fix — verify cliSessionId against
+        // Sprint 7 resume fix (Sprint 42: SQLite mirror) — verify cliSessionId against
         // the latest known session for this cwd in PG (the mirror store).
         try {
-          const pg = require('../lib/postgres');
+          const pg = require('../lib/sqliteStore');
           const pool = pg.getPool();
           if (pool && inheritedCliSessionId) {
             const { getLatestForCwd } = require('../lib/conversationSync');
@@ -172,7 +174,7 @@ function register(app, deps) {
               console.log('[boos] pg-resume: corrected cliSessionId from PG mirror →', latest.cliSessionId.slice(0, 8));
             }
           }
-        } catch {}
+        } catch (e) { errReport.report("routes_sessions-launch", "log", e); }
 
         try {
           launched = await spawnSessionRecord({
@@ -247,7 +249,7 @@ function register(app, deps) {
     const live = webTerminal.get(record.id);
     if (live && !live.exitedAt) {
       if (record.status !== 'running' || record.pid !== live.meta.pid) {
-        try { await persistedSessions.markRunning(record.id, live.meta.pid); } catch {}
+        try {  await persistedSessions.markRunning(record.id, live.meta.pid);  } catch (e) { errReport.report("routes_sessions-launch", "markRunning", e); }
       }
       return res.json({ launched: { id: record.id, pid: live.meta.pid, cliId: record.cliId } });
     }
@@ -261,11 +263,11 @@ function register(app, deps) {
       }
     }
 
-    // Sprint 7: PostgreSQL resume fix — verify cliSessionId is the latest
+    // Sprint 7 resume fix (Sprint 42: SQLite mirror) — verify cliSessionId is the latest
     // known for this cwd. If the binding scanner hasn't caught a rotation yet,
     // PG (which mirrors every JSONL write) has the freshest session id.
     try {
-      const pg = require('../lib/postgres');
+      const pg = require('../lib/sqliteStore');
       const pool = pg.getPool();
       if (pool) {
         const { getLatestForCwd } = require('../lib/conversationSync');
@@ -276,7 +278,7 @@ function register(app, deps) {
           console.log('[boos] pg-resume: corrected stale cliSessionId →', latest.cliSessionId.slice(0, 8));
         }
       }
-    } catch {}
+    } catch (e) { errReport.report("routes_sessions-launch", "log", e); }
 
     const cfg = await loadConfig();
     const cli = findCliById(cfg, record.cliId);
@@ -441,6 +443,7 @@ function register(app, deps) {
     const resolvedCwd = path.resolve(String(cwd));
     try {
       const fsmod = require('node:fs/promises');
+      const errReport = require("../lib/errorReport");
       const st = await fsmod.stat(resolvedCwd);
       if (!st.isDirectory()) {
         return res.status(400).json({ error: `cwd is not a directory: ${resolvedCwd}` });

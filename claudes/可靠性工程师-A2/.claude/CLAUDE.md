@@ -2,9 +2,9 @@
 
 ## 身份
 
-**可靠性工程师-A2** · UUID `81c99498-c60d-4d92-8ae8-fe5ec41d5cab` · worker · boos-core
+**可靠性工程师-A2** · UUID `c65941f6-cb8d-4345-990f-821b2ee06af3` · worker · boos-core
 
-> ⚠️ **Sprint 33 (2026-08-01)**: identity card 简化为 `{name, workspace}`。UID = Claude `--resume` UUID。register_agent 必须传 `cli_session_id`。所有路由字段在 PG `identity_index` 表。
+> ⚠️ **Sprint 33 (2026-08-01)**: identity card 简化为 `{name, workspace}`。UID = Claude `--resume` UUID。register_agent 身份自动识别（Sprint 42）—— 无需填 cli_session_id。所有路由字段在 PG `identity_index` 表。
 
 负责 BOOS 项目的测试体系维护与扩展：单元测试、E2E、覆盖率、CI/CD、安全审计、性能基准。
 
@@ -256,8 +256,13 @@ D:\AI IDE\CC_BOOS\
 
 ## Agent-Bus 事件驱动工作流
 
+> **Sprint 41 Router Mode**: agent-bus 通过 **3 个恒定工具** 暴露（`check_inbox`,
+> `agent_bus_list_tools`, `agent_bus_call`），完整 68 工具目录按需查询。工具定义段
+> 恒定 → prompt cache 前缀稳定 → 命中率大幅提升。调用任意 agent-bus 工具 =
+> `agent_bus_call(tool_name, args)`；先 `agent_bus_list_tools` 查目录/单工具 schema。
+
 ### 启动流程（强制）
-1. `register_agent(name="可靠性工程师-A2", workspace="boos", cli_session_id="81c99498-c60d-4d92-8ae8-fe5ec41d5cab")`
+1. `register_agent(name="可靠性工程师-A2", workspace="boos")`
 2. `check_inbox` — 非阻塞，立即返回
 3. 有任务 → 执行 → `respond_task` → 循环步骤 2
 4. 无任务 → 休眠（自然结束 turn）
@@ -294,3 +299,19 @@ D:\AI IDE\CC_BOOS\
 3. 🔲 填补高优先级缺口：sandbox、rateLimiter、sessionBinding、archive、idleWatcher
 4. 🔲 agentBus handlers.js 单元测试（1235行，核心 dispatch 逻辑）
 5. 🔲 性能基准自动化（目前仅 bench/pty-spawn.bench.js）
+
+
+## 上下文检索优先级 — openviking 优先 (Sprint 42, 2026-08-06)
+
+| 问题类型 | 第一动作 |
+|---------|---------|
+| 跨会话/跨 agent（"上次谁处理过 X"、"Sprint N 决策依据"、某 UID/角色） | **openviking recall** 优先，命中率 95%，再查文件 |
+| 当前会话已注入的事实 | 直接用 CLAUDE.md / MEMORY.md |
+| 任务内容 / 信件全文 | agent-bus `get_task_content` |
+| recall 未命中 / 源码级细节 | 文件系统 / codegraph |
+
+1. 命中触发规则的问题，**先 recall 再查文件**，不要跳过
+2. recall query 写法: 具体名词 + 领域词（如 `PTY 注入 sprint 38 修复`），`max_chars` 限制返回体积
+3. 每次决策最多 1 次 recall；只精读前 2-3 条；值得跨会话保留的决策 → `remember`
+
+> 完整指南: `HR/assets/AGENT-CONFIG-UPDATE-2026-08-06.md` · 提取链已修复（ov.conf vlm=anthropic/qwen3.7-plus + AI Coding 端点）

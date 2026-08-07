@@ -20,6 +20,9 @@ let tmpBase;
 const CLEAR_MODS = [
   '../lib/config', '../lib/agentBus/storeCore',
   '../lib/agentBus/store', '../lib/agentBus/storeIdentity',
+  // Sprint 41 Phase 3: store split into storeAgents/storeTasks/storeIdentity —
+  // these capture store.DB_PATH at module load, so clear them with store.
+  '../lib/agentBus/storeAgents', '../lib/agentBus/storeTasks',
   '../lib/agentBus/queue', '../lib/agentBus/registry',
   '../lib/agentBus/handlers', '../lib/agentBus/handlersAdmin',
   '../lib/agentBus/handlersDag', '../lib/agentBus/handlersSession',
@@ -68,6 +71,14 @@ function nextUid() {
   return `test-${n}-${n}-${n}-${n}${n}${n}${n}${n}${n}`;
 }
 
+async function seedWorkspace(ws = 'boos') {
+  const { dispatch } = require('../lib/agentBus/handlers');
+  await dispatch('register_agent', {
+    name: 'ws-seed-' + ws, workspace: ws, role: 'supervisor',
+    cli_session_id: 'seed-' + ws + '-0000000000000000',
+  }, { sessionId: 'sess-seed-' + ws });
+}
+
 async function registerPm(name = 'pm-test') {
   const { dispatch } = require('../lib/agentBus/handlers');
   const res = await dispatch('register_agent', {
@@ -98,6 +109,7 @@ function makeCtx(agent) {
 
 describe('dispatch — unknown tool', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('returns error for unknown tool name', async () => {
@@ -118,6 +130,7 @@ describe('dispatch — unknown tool', () => {
 
 describe('register_agent', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('registers a new agent successfully', async () => {
@@ -203,6 +216,7 @@ describe('register_agent', () => {
 
 describe('deregister_agent', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('deregisters a registered agent', async () => {
@@ -226,6 +240,7 @@ describe('deregister_agent', () => {
 
 describe('list_agents', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('lists agents in workspace', async () => {
@@ -261,6 +276,7 @@ describe('list_agents', () => {
 
 describe('send_task', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('sends a task to another agent', async () => {
@@ -314,7 +330,7 @@ describe('send_task', () => {
     const pm = await registerPm('cross-pm');
     const other = await registry.registerAgent({
       name: 'other-ws', intro: 'other', workspace: 'other-ws',
-      role: 'worker', capabilities: ['test'],
+      role: 'supervisor', capabilities: ['test'],
       cliSessionId: '99999999-9999-9999-9999-999999999999',
     });
 
@@ -373,6 +389,7 @@ describe('send_task', () => {
 
 describe('check_inbox + respond_task flow', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('full send → check → respond → settle cycle', async () => {
@@ -483,6 +500,7 @@ describe('check_inbox + respond_task flow', () => {
 
 describe('cancel_task', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('sender can cancel their own task', async () => {
@@ -553,6 +571,7 @@ describe('cancel_task', () => {
 
 describe('list_my_tasks', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('returns tasks for worker', async () => {
@@ -596,6 +615,7 @@ describe('list_my_tasks', () => {
 
 describe('get_task', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('retrieves task by id', async () => {
@@ -628,6 +648,7 @@ describe('get_task', () => {
 // Additional edge tests
 describe('list_my_tasks edge cases', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('returns empty list for worker with no tasks', async () => {
@@ -644,6 +665,7 @@ describe('list_my_tasks edge cases', () => {
 
 describe('broadcast', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('broadcasts to all agents in workspace', async () => {
@@ -697,6 +719,7 @@ describe('broadcast', () => {
 
 describe('handlers edge cases', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('send_task stores required_capabilities on persistent task', async () => {
@@ -814,6 +837,7 @@ describe('handlers edge cases', () => {
 
 describe('Sprint 37 — Goal CRUD', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('goal_create succeeds for registered worker', async () => {
@@ -966,6 +990,7 @@ describe('Sprint 37 — Goal CRUD', () => {
 
 describe('Sprint 37 — DAG Lifecycle', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('dag_create succeeds for PM', async () => {
@@ -1175,6 +1200,7 @@ describe('Sprint 37 — DAG Lifecycle', () => {
 
 describe('Sprint 37 — DAG Reject + Escalation', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('dag_reject_task by reviewer', async () => {
@@ -1281,6 +1307,7 @@ describe('Sprint 37 — DAG Reject + Escalation', () => {
 
 describe('Sprint 37 — Settlement Gate', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('respond_task → submitted → settle_task(approve) → completed', async () => {
@@ -1413,6 +1440,7 @@ describe('Sprint 37 — Settlement Gate', () => {
 
 describe('Sprint 37 — DAG Decomposer', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('dag_decompose creates DAG with sub-tasks', async () => {
@@ -1502,6 +1530,7 @@ describe('Sprint 37 — DAG Decomposer', () => {
 
 describe('Sprint 37 — Proposal Flow', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('dag_propose_task creates proposed task', async () => {
@@ -1631,6 +1660,7 @@ describe('Sprint 37 — Proposal Flow', () => {
 
 describe('Sprint 37 — Runtime Adjustment', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('dag_rearrange adds and removes dependencies', async () => {
@@ -1771,6 +1801,7 @@ describe('Sprint 37 — Runtime Adjustment', () => {
 
 describe('Sprint 37 — Conflict Escalation', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('dag_escalate_conflict notifies ROOT', async () => {
@@ -1822,6 +1853,7 @@ describe('Sprint 37 — Conflict Escalation', () => {
 
 describe('Sprint 37 — Review Questions', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('dag_add_questions adds review questions to task', async () => {
@@ -1912,6 +1944,7 @@ describe('Sprint 37 — Review Questions', () => {
 
 describe('Sprint 37 — Edge Cases', () => {
   before(() => { freshSetup(); });
+  before(async () => { await seedWorkspace(); });
   after(() => { teardown(); });
 
   test('idempotent register with same cli_session_id returns same uid', async () => {
@@ -2012,5 +2045,27 @@ describe('Sprint 37 — Edge Cases', () => {
     const myTasks = await dispatch('dag_my_tasks', {}, makeCtx(worker));
     assert.ok(myTasks.ok);
     assert.ok(myTasks.as_executor || myTasks.as_reviewer);
+  });
+
+  // Sprint 42: workspace creation is PM-only; workers must pick existing.
+  test('register_agent worker cannot create a new workspace', async () => {
+    const { dispatch } = require('../lib/agentBus/handlers');
+    const result = await dispatch('register_agent', {
+      name: 'WsWorker', workspace: 'brand-new-ws', role: 'worker',
+      cli_session_id: '33333333-4444-5555-6666-777777777777',
+    }, { sessionId: 'sess-wsworker' });
+    assert.ok(!result.ok, 'worker must be rejected');
+    assert.match(result.error || '', /only PM/i, 'error should mention PM-only');
+  });
+
+  // Sprint 42: identity auto-detection — cli_session_id omitted, ctx.uid used.
+  test('register_agent auto-detects identity from ctx.uid (no cli_session_id)', async () => {
+    const { dispatch } = require('../lib/agentBus/handlers');
+    const autoUid = '22222222-3333-4444-5555-666666666666';
+    const result = await dispatch('register_agent', {
+      name: 'AutoDetectAgent', workspace: 'boos', role: 'worker',
+    }, { sessionId: 'sess-auto', uid: autoUid });
+    assert.ok(result.ok, 'register should succeed without cli_session_id');
+    assert.strictEqual(result.uid, autoUid, 'uid should come from ctx.uid');
   });
 });

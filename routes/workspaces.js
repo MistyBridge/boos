@@ -6,6 +6,8 @@
 //           workspaceOccupancySessions, workspaceOccupancyLabel }
 
 'use strict';
+const errReport = require('../lib/errorReport');   // Sprint 42: no silent failures
+
 
 const path = require('node:path');
 const os = require('node:os');
@@ -112,6 +114,7 @@ function register(app, { asyncH, loadConfig, persistedSessions, listWorkspaces, 
     const body = req.body || {};
     const cfg = await loadConfig();
     const fsp = require('node:fs/promises');
+    const errReport = require("../lib/errorReport");
     const boosDir = path.resolve(cfg.workDir, name, '.boos');
     const layoutPath = path.join(boosDir, 'layout.json');
     try { await fsp.mkdir(boosDir, { recursive: true }); } catch {}
@@ -119,7 +122,7 @@ function register(app, { asyncH, loadConfig, persistedSessions, listWorkspaces, 
     try {
       const raw = await fsp.readFile(layoutPath, 'utf-8');
       existing = JSON.parse(raw);
-    } catch {}
+    } catch (e) { errReport.report("routes_workspaces", "parse", e); }
     const merged = {
       ...existing,
       agentPositions: { ...existing.agentPositions, ...(body.agentPositions || {}) },

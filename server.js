@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 'use strict';
+const errReport = require('./lib/errorReport');   // Sprint 42: no silent failures
+
 
 const path = require('node:path');
 const os = require('node:os');
@@ -70,7 +72,7 @@ try {
   require('node:fs').writeFileSync(
     require('node:path').join(DATA_DIR, '.shutdown-token'), SHUTDOWN_TOKEN, 'utf-8'
   );
-} catch {}
+} catch (e) { errReport.report("server", "oper", e); }
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -124,7 +126,7 @@ const IS_DEV = !__dirname.includes(`${path.sep}node_modules${path.sep}`) && proc
     if (require('node:fs').statSync(nodeModulesDir).isDirectory()) {
       app.use('/node_modules', express.static(nodeModulesDir, { maxAge: '7d' }));
     }
-  } catch {}
+  } catch (e) { errReport.report("server", "oper", e); }
 }
 
 // ── Embedded Agent-Bus MCP ─────────────────────────────────────────
@@ -178,7 +180,7 @@ const _sh = createSessionHelpers({
         console.log('[boos] managedAgents auto-discovered:', discovered.length, 'paths');
         return discovered;
       }
-    } catch {}
+    } catch (e) { errReport.report("server", "oper", e); }
     // Fallback: manual config (legacy).
     try {
       return JSON.parse(require('node:fs').readFileSync(
@@ -274,7 +276,7 @@ if (process.env.BOOS_KEEP_ALIVE !== '1') {
 try {
   const { setSessionCountCallback } = require('./lib/agentBus/transport');
   setSessionCountCallback((n) => idleWatcher.setMcpConnectionCount(n));
-} catch {}
+} catch (e) { errReport.report("server", "oper", e); }
 
 // ---- health / capabilities / lifecycle ----
 require('./routes/health').register(app, {
@@ -320,6 +322,7 @@ require('./routes/version').register(app, {
 // ---- decisions + goals ----
 require('./routes/decisions').register(app, { asyncH });
 require('./routes/goals').register(app, { asyncH });   // Sprint 24: AutoPilot goals
+require('./routes/usage').register(app, { asyncH, persistedSessions });  // Sprint 41: token + cache telemetry
 require('./routes/hr').register(app, { hrAgent: require('./lib/hrAgent') });
 require('./routes/archive').register(app, { asyncH });        // Sprint 9: archive system
 require('./routes/agents').register(app, { asyncH });        // Sprint 9: agent-bus ↔ canvas bridge
@@ -354,10 +357,10 @@ function listenWithFallback(preferred) {
               const pid = parseInt(m[0], 10);
               if (pid && pid !== process.pid) {
                 console.log(`[boos] 强制终止 PID ${pid} (占用端口 ${preferred})`);
-                try { process.kill(pid, 'SIGKILL'); } catch {}
+                try { process.kill(pid, 'SIGKILL'); } catch (e) { errReport.report("server", "oper", e); }
               }
             }
-          } catch {}
+          } catch (e) { errReport.report("server", "oper", e); }
           await new Promise(r => setTimeout(r, 2000));
           attempt(retries + 1);
         })();
@@ -411,14 +414,16 @@ function listenWithFallback(preferred) {
   // PostgreSQL (degraded if Docker unavailable), agent-bus notifications,
   // archive system, tunnel prewarm.
   if (process.env.BOOS_NO_POSTGRES !== '1') {
-    try { await require('./lib/postgres').ensureContainer(); }
-    catch (e) { console.warn('[boos] postgres: ensureContainer failed —', e.message); }
+    // Sprint 42: PostgreSQL removed — SQLite is embedded, nothing to ensure.
   }
 
   if (process.env.BOOS_NO_AGENT_BUS_WATCH !== '1') {
     try {
-      const { bootstrapIdentities } = require('./lib/agentBus/store');
+      const { bootstrapIdentities, dedupeIdentities } = require('./lib/agentBus/store');
       bootstrapIdentities().catch(e => console.warn('[boos] bootstrapIdentities failed:', e.message));
+      // Sprint 42: dedupe stale duplicate identity cards (session rebuilds
+      // create new UUIDs with the same name+workspace).
+      dedupeIdentities().catch(e => console.warn('[boos] dedupeIdentities failed:', e.message));
 
       // Sprint 35: migrate legacy tasks from shared agent-bus.json to per-agent inbox files.
       // One-time migration — subsequent starts will skip if inbox files already exist.
@@ -477,6 +482,13 @@ function listenWithFallback(preferred) {
   try { require('./lib/archive').startPeriodicPrune(); }
   catch (e) { console.warn('[boos] archive system failed to start:', e.message); }
 
+  // Sprint 41: sweep externalized-content cache files older than 7 days.
+  try {
+    const cacheStore = require('./lib/agentBus/cacheStore');
+    const swept = cacheStore.sweep();
+    if (swept > 0) console.log('[boos] cache sweep:', swept, 'expired content files removed');
+  } catch (e) { console.warn('[boos] cache sweep failed:', e.message); }
+
   // Agent-bus task lifecycle: auto-archive terminal tasks on startup,
 	  // then every 6 hours. Newly terminal tasks are auto-archived immediately
 	  // by updateTaskStatus → _autoArchiveTask.
@@ -493,7 +505,7 @@ function listenWithFallback(preferred) {
 	  // Prewarm tunnel probe so Remote tab loads instantly.
   try {
     tunnel.probe(true).catch(() => {});
-  } catch {}
+  } catch (e) { errReport.report("server", "oper", e); }
 
   // Auto-start the tunnel if the user enabled it on the Remote page.
   // This is the BACKEND PROCESS bringing its own tunnel up on startup —
@@ -514,7 +526,7 @@ function listenWithFallback(preferred) {
     let WebSocketServer;
     try {
       ({ WebSocketServer } = require('ws'));
-    } catch {}
+    } catch (e) { errReport.report("server", "oper", e); }
     if (WebSocketServer) {
       const wss = new WebSocketServer({ noServer: true });
       server.on('upgrade', async (req, socket, head) => {
@@ -580,7 +592,7 @@ function listenWithFallback(preferred) {
   process.on('exit', () => {
     try {
       webTerminal.killAll();
-    } catch {}
+    } catch (e) { errReport.report("server", "oper", e); }
   });
 
   const apiUrl = `http://localhost:${port}`;
@@ -589,17 +601,45 @@ function listenWithFallback(preferred) {
   // Crash resilience — log and attempt graceful shutdown so the next boot
   // can auto-resume managed sessions.  Without cleanup the port.lock stays
   // and active-sessions.json is never written, breaking crash-reconnect.
+  // Sprint 42: every crash log dumps a work-state snapshot so the death
+  // moment is diagnosable (PTY count, sessions, port) — no more "died with
+  // exit code 1 and zero context".
+  let bootTime = Date.now();
+  const stateSnapshot = () => {
+    try {
+      const live = (() => { try { return webTerminal.list().filter((t) => !t.exitedAt).length; } catch { return -1; } })();
+      const total = (() => { try { return webTerminal.list().length; } catch { return -1; } })();
+      return `livePTYs=${live}/${total} port=${lifecycleState.currentPort || '?'} uptime=${Math.round((Date.now() - bootTime) / 1000)}s`;
+    } catch (e) { return 'snapshot failed: ' + e.message; }
+  };
+  // Sprint 42: crash forensics — synchronous write on ANY exit path. The
+  // async console pipeline can drop the last lines when the process dies
+  // via process.exit() (buffered stderr never flushed), which made the
+  // repeated boot-injection crashes look like "no error at all". This
+  // writeFileSync cannot be lost.
+  const crashForensics = require('./lib/crashForensics');
+  process.on('exit', (code) => {
+    try {
+      require('node:fs').writeFileSync(
+        require('node:path').join(DATA_DIR, 'crash-forensics.json'),
+        JSON.stringify({ code, lastActivity: crashForensics.lastActivity(), snapshot: stateSnapshot(), ts: new Date().toISOString() }, null, 2),
+        'utf-8',
+      );
+    } catch {}
+  });
   process.on('unhandledRejection', (reason) => {
     console.error('[boos] UNHANDLED REJECTION:', reason?.message || reason);
     if (reason?.stack) console.error(reason.stack);
+    console.error('[boos] state at rejection:', stateSnapshot());
   });
   process.on('uncaughtException', (err) => {
     console.error('[boos] UNCAUGHT EXCEPTION:', err.message);
     if (err.stack) console.error(err.stack);
+    console.error('[boos] state at crash:', stateSnapshot());
     // Attempt graceful shutdown — at minimum this writes active-sessions.json
     // and removes port.lock so the next boot can cleanly take over the port
     // and auto-resume managed agent sessions.
-    try { gracefulShutdown('uncaught exception: ' + (err.message || 'unknown')); } catch {}
+    try { gracefulShutdown('uncaught exception: ' + (err.message || 'unknown')); } catch (e) { errReport.report("server", "oper", e); }
     // If gracefulShutdown didn't exit (e.g. it hung), force exit after 5s.
     setTimeout(() => process.exit(1), 5000).unref();
   });
@@ -639,26 +679,27 @@ function listenWithFallback(preferred) {
         hasManagedAgents = Object.values(allSessions).some(
           (s) => s.cliSessionId && !s.deletedAt && !s.manualStopped
         );
-      } catch {}
+      } catch (e) { errReport.report("server", "oper", e); }
       // MCP connections keep the server alive in all modes.
       let mcpCount = 0;
-      try { mcpCount = idleWatcher.status().mcpConnections || 0; } catch {}
+      try { mcpCount = idleWatcher.status().mcpConnections || 0; } catch (e) { errReport.report("server", "oper", e); }
       const hasMcp = mcpCount > 0;
       // Managed agent sessions with pending inbox tasks mean work is in flight.
       let agentsWithWork = 0;
       try {
         const inboxDir = require('node:path').join(DATA_DIR, 'agent-bus', 'inbox');
         const fs = require('node:fs');
+        const errReport = require("./lib/errorReport");
         if (fs.existsSync(inboxDir)) {
           const files = fs.readdirSync(inboxDir).filter((f) => f.endsWith('.json') && !f.endsWith('.bak'));
           for (const f of files) {
             try {
               const data = JSON.parse(fs.readFileSync(require('node:path').join(inboxDir, f), 'utf-8'));
               if ((data.pending || []).length + (data.in_progress || []).length > 0) agentsWithWork++;
-            } catch {}
+            } catch (e) { errReport.report("server", "oper", e); }
           }
         }
-      } catch {}
+      } catch (e) { errReport.report("server", "oper", e); }
 
       if (lifecycleState.heartbeatSeen) {
         if (Date.now() - lifecycleState.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {

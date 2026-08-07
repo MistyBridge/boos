@@ -7,6 +7,8 @@
 //           findCliById, spawnEnv }
 
 'use strict';
+const errReport = require('../lib/errorReport');   // Sprint 42: no silent failures
+
 
 function register(app, { asyncH, persistedSessions, webTerminal, folders, loadConfig, findCliById, spawnEnv }) {
 
@@ -49,6 +51,42 @@ function register(app, { asyncH, persistedSessions, webTerminal, folders, loadCo
     res.json({ session: updated });
   }));
 
+  // ---- cli-session-id (Sprint 42: managed update channel) ----
+  app.put('/api/sessions/:id/cli-session-id', asyncH(async (req, res) => {
+    const record = await persistedSessions.get(req.params.id);
+    if (!record) return res.status(404).json({ error: 'session not found' });
+
+    const { cliSessionId, projectSlug } = req.body || {};
+
+    // UUID format validation (lenient — rejects obviously malformed input).
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (typeof cliSessionId === 'string' && cliSessionId.trim()) {
+      if (!UUID_RE.test(cliSessionId.trim())) {
+        return res.status(400).json({ error: 'invalid UUID format for cliSessionId' });
+      }
+    }
+    if (typeof projectSlug === 'string' && !projectSlug.trim()) {
+      return res.status(400).json({ error: 'projectSlug must be non-empty if provided' });
+    }
+
+    const patch = {};
+    if (typeof cliSessionId === 'string' && cliSessionId.trim()) {
+      patch.cliSessionId = cliSessionId.trim();
+    }
+    if (typeof projectSlug === 'string' && projectSlug.trim()) {
+      patch.projectSlug = projectSlug.trim();
+    }
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ error: 'at least one of cliSessionId or projectSlug is required' });
+    }
+
+    const updated = await persistedSessions.update(req.params.id, patch);
+    if (!updated) return res.status(500).json({ error: 'update failed' });
+
+    console.log('[boos] session', req.params.id, 'updated:', JSON.stringify(patch));
+    res.json({ session: updated, updated: Object.keys(patch) });
+  }));
+
   // ---- switch-cli ----
   app.post('/api/sessions/:id/switch-cli', asyncH(async (req, res) => {
     const targetCliId = typeof req.body?.cliId === 'string' ? req.body.cliId.trim() : '';
@@ -88,16 +126,16 @@ function register(app, { asyncH, persistedSessions, webTerminal, folders, loadCo
       status: 'exited', pid: null, exitCode: null,
       exitedAt: Date.now(), manualStopped: true, lastActiveAt: Date.now(),
     });
-    try { require('../lib/cliActivity').releaseSession(record.id); } catch {}
+    try {  require('../lib/cliActivity').releaseSession(record.id);  } catch (e) { errReport.report("routes_sessions", "require", e); }
     res.json({ stopped, session: updated });
   }));
 
   // ---- delete ----
   // Sprint 38: token removed — frontend boosConfirm dialog is the protection.
   app.delete('/api/sessions/:id', asyncH(async (req, res) => {
-    try { webTerminal.kill(req.params.id); } catch {}
+    try {  webTerminal.kill(req.params.id);  } catch (e) { errReport.report("routes_sessions", "kill", e); }
     const removed = await persistedSessions.remove(req.params.id);
-    try { require('../lib/cliActivity').releaseSession(req.params.id); } catch {}
+    try {  require('../lib/cliActivity').releaseSession(req.params.id);  } catch (e) { errReport.report("routes_sessions", "require", e); }
     res.json({ removed });
   }));
 
@@ -123,6 +161,7 @@ function register(app, { asyncH, persistedSessions, webTerminal, folders, loadCo
     const cfg = await loadConfig();
     const editor = (cfg.editor || '').trim() || 'code';
     const { spawn } = require('node:child_process');
+    const errReport = require("../lib/errorReport");
     try {
       const child = spawn(editor, [`"${record.cwd}"`], {
         detached: true, stdio: 'ignore', shell: true,

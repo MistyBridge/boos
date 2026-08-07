@@ -1,7 +1,7 @@
 {
   "env": {
     "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
-    "ANTHROPIC_AUTH_TOKEN": "sk-ec5d027792304d94a26c98408a63d16b",
+    "ANTHROPIC_AUTH_TOKEN": "sk-nXb6XVPDkp9oOpxsEHp7R9STrcub5HH83m7OuYZsq62X2hcx",
     "ANTHROPIC_MODEL": "DeepSeek-v4-flash",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "DeepSeek-v4-flash",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "DeepSeek-v4-flash",

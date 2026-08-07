@@ -1,14 +1,36 @@
 // Sprint 8 Waves 5-6 unit tests — #67 priority queue, #68 retry, #69 round-robin.
-// Uses real store but with unique test task IDs, cleans up after each test.
+// Uses a temp BOOS_HOME so tests never touch real ~/.boos production data.
 
 'use strict';
 
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
+const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
 
-const store = require('../lib/agentBus/store');
-const queue = require('../lib/agentBus/queue');
-const collaborationLoop = require('../lib/agentBus/collaborationLoop');
+let _testHome;
+let store, queue, collaborationLoop;
+before(() => {
+  _testHome = path.join(os.tmpdir(), 'boos-w56-' + Date.now().toString(36));
+  fs.mkdirSync(_testHome, { recursive: true });
+  process.env.BOOS_HOME = _testHome;
+  for (const m of ['../lib/config', '../lib/agentBus/storeCore',
+    '../lib/agentBus/store', '../lib/agentBus/storeAgents',
+    '../lib/agentBus/storeTasks', '../lib/agentBus/storeIdentity',
+    '../lib/agentBus/queue', '../lib/agentBus/collaborationLoop',
+    '../lib/agentBus/inboxStore']) {
+    try { delete require.cache[require.resolve(m)]; } catch {}
+  }
+  // Re-require AFTER BOOS_HOME is set so these bind to the temp dir.
+  store = require('../lib/agentBus/store');
+  queue = require('../lib/agentBus/queue');
+  collaborationLoop = require('../lib/agentBus/collaborationLoop');
+});
+after(() => {
+  delete process.env.BOOS_HOME;
+  try { fs.rmSync(_testHome, { recursive: true, force: true }); } catch {}
+});
 
 const TEST_PREFIX = 'test_w56_';
 let _cleanupIds = [];
@@ -35,7 +57,10 @@ async function _regAgent(name, caps = [], role = 'worker') {
 }
 
 async function _regSender() {
-  return _regAgent('sender_' + (_nextAgentIdx), [], 'supervisor');
+  // Sprint 37: a supervisor-sent task that a worker responds goes to
+  // "submitted" (PM settlement), NOT completed. Retry tests want the
+  // single-step completed path, so the sender is a plain worker.
+  return _regAgent('sender_' + (_nextAgentIdx), [], 'worker');
 }
 
 function _trackId(taskId) { _cleanupIds.push(taskId); }
@@ -128,7 +153,9 @@ describe('retry (#68)', () => {
     const ex = await queue.retryTask(r.task.task_id, senderUid);
     assert.ok(!ex.ok);
     assert.ok(ex.exhausted);
-    const rel = await store.getTaskAsync(r.task.task_id);
+    // Sprint 35: terminal tasks (exhausted) are archived — query the archive.
+    const rel = await queue.getArchivedTask(r.task.task_id);
+    assert.ok(rel, 'exhausted task should be archived');
     assert.equal(rel.status, 'exhausted');
   });
 
@@ -148,7 +175,7 @@ describe('retry (#68)', () => {
     assert.ok(rr.error.includes('only the sender'));
   });
 
-  it('only completed/cancelled retryable', async () => {
+  it('retries a pending (unclaimed) task', async () => {
     const senderUid = await _regSender();
     const sender = { uid: senderUid, name: 'pm', intro: '', workspace: 'test_w56' };
     const recv = await _regAgent('recv');
@@ -156,9 +183,10 @@ describe('retry (#68)', () => {
     const r = await queue.sendTask({ sender, receiver_uid: recv, content: 'x' });
     _trackId(r.task.task_id);
 
+    // A task still in the inbox (pending) is directly retryable.
     const rr = await queue.retryTask(r.task.task_id, senderUid);
-    assert.ok(!rr.ok);
-    assert.ok(rr.error.includes('only completed or cancelled'));
+    assert.ok(rr.ok, 'pending task should be retryable: ' + JSON.stringify(rr));
+    assert.equal(rr.retry_count, 1);
   });
 });
 
@@ -207,7 +235,9 @@ describe('round-robin (#69)', () => {
 
   it('findBestAgent returns null for empty list', async () => {
     const sender = { uid: await _regSender(), name: 'pm', intro: '', workspace: 'test_w56' };
-    assert.equal(collaborationLoop.findBestAgent([], ['qa'], sender.uid), null);
+    // findBestAgent is async.
+    const best = await collaborationLoop.findBestAgent([], ['qa'], sender.uid);
+    assert.equal(best, null);
   });
 });
 

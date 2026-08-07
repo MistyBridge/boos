@@ -15,6 +15,7 @@
 
 const dagHandlers = require('../lib/agentBus/handlersDag');
 const store = require('../lib/agentBus/store');
+const errReport = require("../lib/errorReport");
 
 // Build a synthetic MCP ctx from the HTTP request.
 // Most dag_* handlers only need ctx.uid for auth; PM-only

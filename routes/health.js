@@ -10,6 +10,8 @@
 // setState(merge).
 
 'use strict';
+const errReport = require('../lib/errorReport');   // Sprint 42: no silent failures
+
 
 const path = require('node:path');
 const os = require('node:os');
@@ -117,6 +119,7 @@ function register(app, { asyncH, webTerminal, pkg, gracefulShutdown, openInBrows
 
     setImmediate(() => {
       const { spawn } = require('node:child_process');
+      const errReport = require("../lib/errorReport");
       try {
         const child = spawn(process.execPath, args, {
           detached: true, stdio: 'ignore', windowsHide: true, shell: false,

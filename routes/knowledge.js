@@ -6,6 +6,7 @@
 'use strict';
 
 const kb = require('../lib/knowledgeBase');
+const errReport = require("../lib/errorReport");
 
 function register(app, { asyncH }) {
   // GET /api/knowledge/:section/:file...? — read entry or list section
