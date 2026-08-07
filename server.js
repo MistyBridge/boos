@@ -542,7 +542,22 @@ function listenWithFallback(preferred) {
           }
         } else {
           const origin = req.headers.origin;
-          if (origin && !ALLOWED_ORIGINS.has(origin) && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
+          // Allow: known hosted origin, loopback, or SAME-ORIGIN requests
+          // (remote deployment — page served from http://<lan-ip>:7780
+          // connecting ws://<lan-ip>:7780). Same-origin means the Origin
+          // host matches the Host header; that's the browser loading the
+          // page from this very server, which is always legitimate.
+          const host = String(req.headers.host || '').toLowerCase();
+          const sameOrigin = origin && host && (() => {
+            try {
+              const o = new URL(origin);
+              const h = o.host.toLowerCase();
+              return h === host;
+            } catch { return false; }
+          })();
+          if (origin && !ALLOWED_ORIGINS.has(origin)
+              && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
+              && !sameOrigin) {
             socket.destroy();
             return;
           }
