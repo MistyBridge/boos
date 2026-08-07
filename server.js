@@ -326,6 +326,7 @@ require('./routes/agents').register(app, { asyncH });        // Sprint 9: agent-
 require('./routes/agent-bus-tasks').register(app, { asyncH });  // Sprint 17 A1: task query API
 require('./routes/dags').register(app, { asyncH });             // Sprint 34: DAG REST API
 require('./routes/knowledge').register(app, { asyncH });     // Sprint 10: shared knowledge base
+require('./routes/usage').register(app, { asyncH, persistedSessions });  // Sprint 41: token + cache telemetry
 require('./routes/workspaceConfig').register(app, { asyncH, workspaceConfig: require('./lib/workspaceConfig') }); // Sprint 32
 
 function listenWithFallback(preferred) {

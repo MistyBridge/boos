@@ -152,6 +152,7 @@ export const TAB_HEADINGS = {
   decisions: T.decisions,
   goals:     T.goals,
   dashboard: T.dashboard,
+  usage:     '用量监控',
 };
 
 // ── persistence helpers (localStorage) ──────────────────────────

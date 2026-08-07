@@ -1,10 +1,7 @@
 {
   "name": "@mistybridge/boos",
   "version": "1.2.0",
-  "description": "Claude Code Session Manager — Windows web UI to manage many concurrent claude sessions: live list, snapshot/restore, focus existing window, new session in an isolated workspace with repo clones",
-  "os": [
-    "win32"
-  ],
+  "description": "Claude Code Session Manager — web UI to manage many concurrent claude sessions: live list, snapshot/restore, focus existing window, new session in an isolated workspace with repo clones",
   "license": "MIT",
   "main": "server.js",
   "bin": {
