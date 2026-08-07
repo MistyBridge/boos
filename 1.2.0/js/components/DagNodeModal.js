@@ -4,7 +4,7 @@
 
 import { html } from '../html.js';
 import { useState } from 'preact/hooks';
-import { answerDagQuestion } from '../api.js';
+import { addDagQuestions, answerDagQuestion } from '../api.js';
 import { setToast } from '../toast.js';
 
 const TAB_KEYS = ['detail', 'questions', 'feedback', 'history'];
